@@ -6,4 +6,6 @@ set(CMAKE_CXX_STANDARD 20)
 add_executable(ambry
         main.cpp
         lib/db.cpp lib/db.cpp
-        lib/cache.hpp lib/cache.cpp)
+        lib/cache.hpp lib/cache.cpp
+        lib/io_manager.hpp lib/io_manager.cpp
+        lib/types.hpp)

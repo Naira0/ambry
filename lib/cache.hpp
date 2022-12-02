@@ -10,20 +10,19 @@
 #include <map>
 #include <optional>
 
+#include "types.hpp"
+
 namespace ambry
 {
 	class Cache
 	{
 	public:
 
-		Cache() = default;
+		Cache(DBContext &context) :
+			m_context(context)
+		{}
 
-		Cache(size_t mem_size)
-		{
-			m_data.reserve(mem_size);
-		}
-
-		void reserve(size_t size);
+		size_t write_to_free(std::pair<size_t, size_t> free_entry, const uint8_t *bytes, size_t size);;
 
 		// writes n bytes to cache and returns the starting offset of the bytes written
 		size_t write(const uint8_t *bytes, size_t size);
@@ -33,24 +32,12 @@ namespace ambry
 
 		// writes at a specific offset in the cache
 		void write_at(size_t offset, const uint8_t *bytes, size_t size);
-		
-		// returns a pointer from to the given offset in the cache
-		uint8_t* read(size_t offset);
 
-		// returns the raw data of the cache
-		uint8_t* data();
-
-		// writes to the cache from a C file stream
-		void write_from_stream(FILE *stream, size_t size);
-
-		inline constexpr size_t	
-		size() const;
-
+		// adds offset and size to free list and possibly merges free list enteries
 		void free(size_t offset, size_t size);
 
 	public:
-		std::vector<uint8_t> m_data;
-		std::map<size_t, size_t> m_free_list;
+		DBContext &m_context;
 
 		std::optional<std::pair<size_t, size_t>> 
 		find_free(size_t size);
