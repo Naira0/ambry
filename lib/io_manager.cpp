@@ -155,7 +155,7 @@ namespace ambry
 				key += fgetc(f);
 			}
 
-			data.offset = read_n<size_t>(f, endian)+1;
+			data.offset = read_n<size_t>(f, endian);
 			data.length = read_n<uint32_t>(f, endian);
 
 			m_context.index.emplace(std::move(key), data);
@@ -241,10 +241,7 @@ namespace ambry
 		rewind(dat);
 		rewind(idx);
 
-		uint8_t endian = machine_endian();
-
-		fputc(endian, dat);
-		fputc(endian, idx);
+		fputc(machine_endian(), idx);
 
 		uint8_t *data = m_context.data.data();
 
