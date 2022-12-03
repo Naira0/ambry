@@ -44,14 +44,18 @@ namespace ambry
 
 	enum class FlushMode : uint8_t
 	{
-		ConstantFlush,
-		FlushAtEnd,
-        FlushPeriodically,
+		Constant,
+		OnClose,
+        Periodic,
+        Never,
 	};
 
 	struct Options
 	{
-		FlushMode flush_node = FlushMode::FlushAtEnd;
+		FlushMode flush_mode = FlushMode::OnClose;
+        
+        bool disable_cache   = false;
+        bool async_flush     = true;
 	};
 
     // important shared data
@@ -62,6 +66,7 @@ namespace ambry
         std::map<size_t, uint32_t> free_list;
         Options options;
         std::string name;
+        std::map<size_t, size_t> changelog;
 
         DBContext() = default;
     };

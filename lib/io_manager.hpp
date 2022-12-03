@@ -16,17 +16,8 @@ namespace ambry
 {
 	class IoManager
 	{
+		using Entry = std::pair<const std::string, IndexData>;
 	public:
-		struct Changelog
-		{
-			std::string_view key;
-
-			size_t offset;
-			uint32_t length;
-
-			bool is_valid;
-			bool insertion;
-		};
 
 		enum FType : uint8_t
 		{
@@ -45,15 +36,18 @@ namespace ambry
 
 		Result flush_free_list();
 
-		Result flush_changelog();
+		void flush_changelog();
 
-		void update(size_t idx_offset, Changelog changelog);
+		void insert(Entry &entry);
+
+		void update(Entry &entry);
+
+		void erase(Entry &entry);
 
 	private:
 		DBContext &m_context;
 
-		std::map<size_t, size_t> m_free_changelog;
-		std::multimap<uint32_t, Changelog> m_changelog;
+		
 
 		std::array<FILE*, 3> m_files;
 
@@ -65,9 +59,9 @@ namespace ambry
 		/*
 			the index file format is as follows:
 			2 bytes for the key length
-			1 byte to determine if the key is valud. if its not valid it should skip to the next key
+			1 byte to determine if the key is valid. if its not valid it should skip to the next key
 			the key
-			8 bytes for the offset
+			8 bytes for the offset in the data file/cache
 			4 bytes for the length of the data
 		*/
 		Result load_index();

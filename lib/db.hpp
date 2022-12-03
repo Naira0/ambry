@@ -28,7 +28,6 @@ namespace ambry
 
         Result set(std::string_view key, std::string_view value);
 
-        // returns the value by its appropriate type. if the key was not found its index will be Type::None
         std::optional<std::string_view> 
         get(const std::string &key);
 

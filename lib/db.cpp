@@ -41,30 +41,20 @@ namespace ambry
 
     Result DB::set(std::string_view key, std::string_view value)
     {
-        return set_bytes(key, (uint8_t*)value.data(), value.size());
-    }
-
-    Result DB::set_bytes(std::string_view key, const uint8_t *bytes, uint32_t size)
-    {
         auto iter = m_context.index.emplace(key, IndexData{});
 
         if (!iter.second)
             return {ResultType::KeyNotInserted, "Could not insert key into index"};
 
-        size_t offset = m_data.write(bytes, size);
-
-        m_io_manager.update(0, {
-            key,
-            offset,
-            size,
-            true,
-            true,
-        });
+        uint32_t size = value.size();
+        size_t offset = m_data.write(value.data(), size);
 
         IndexData &data = iter.first->second;
 
         data.offset = offset;
         data.length = size;
+
+        m_io_manager.insert(*iter.first);
 
         return {};
     }
@@ -77,10 +67,12 @@ namespace ambry
             return {ResultType::KeyNotFound, "key does not exist in index"};
         
         IndexData data = iter->second;
-        
+
         m_context.index.erase(iter);
 
         m_data.free(data.offset, data.length);
+
+        m_io_manager.erase(*iter);
 
         return {};
     }

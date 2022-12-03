@@ -10,7 +10,7 @@
 
 namespace ambry
 {
-	size_t Cache::write_back(const uint8_t *bytes, size_t size)
+	size_t Cache::write_back(const char *bytes, size_t size)
 	{
 		size_t n = m_context.data.size();
 
@@ -19,7 +19,7 @@ namespace ambry
 		return n;
 	}
 
-	void Cache::write_at(size_t offset, const uint8_t *bytes, size_t size)
+	void Cache::write_at(size_t offset, const char *bytes, size_t size)
 	{
 		for (size_t i = offset, j = 0; j < size; i++, j++)
 		{
@@ -27,7 +27,7 @@ namespace ambry
 		}
 	}
 
-	size_t Cache::write_to_free(std::pair<size_t, size_t> free_entry, const uint8_t *bytes, size_t size)
+	size_t Cache::write_to_free(std::pair<size_t, size_t> free_entry, const char *bytes, size_t size)
 	{
 		auto [offset, e_size] = free_entry;
 
@@ -43,7 +43,7 @@ namespace ambry
 		return offset;
 	}
 
-	size_t Cache::write(const uint8_t *bytes, size_t size)
+	size_t Cache::write(const char *bytes, size_t size)
 	{
 		auto entry_opt = find_free(size);
 
@@ -58,6 +58,7 @@ namespace ambry
 			n = write_back(bytes, size);
 		}
 
+		m_context.changelog.emplace(n, size);
 
 		return n;
 	}

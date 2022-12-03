@@ -1,9 +1,11 @@
 #include "io_manager.hpp"
 #include "types.hpp"
+#include <cstdint>
 #include <cstdio>
 #include <fcntl.h>
 
 #include <algorithm>
+#include <sys/file.h>
 
 #include "../fmt.hpp"
 
@@ -15,10 +17,9 @@ namespace ambry
 {
 	IoManager::~IoManager()
 	{
-		if (m_context.options.flush_node == FlushMode::FlushAtEnd)
+		if (m_context.options.flush_mode == FlushMode::OnClose)
 		{
 			flush_changelog();
-			flush_free_list();
 		}
 
 		for (auto f : m_files)
@@ -45,6 +46,8 @@ namespace ambry
 				if (!f)
 					return {ResultType::IoFailure, "could not open one of db files"};
 			}
+
+			flock(f->_fileno, LOCK_EX);
 
 			m_files[i] = f;
 		}
@@ -110,6 +113,16 @@ namespace ambry
 		return st.st_size;
 	}
 
+	uint8_t handle_endian(FILE *f)
+	{
+		uint8_t endian = fgetc(f);
+
+		fseek(f, -1, SEEK_CUR);
+		fputc(machine_endian(), f);
+
+		return endian;
+	}
+
 	/*
 		the index format is as follows:
 		2 bytes for the key length
@@ -127,7 +140,7 @@ namespace ambry
 		if (fsize == std::string::npos)
 			return {ResultType::IoFailure, "could not stat one of db files"};
 
-		uint8_t endian = fgetc(f);
+		uint8_t endian = handle_endian(f);
 
 		while (ftell(f) < fsize)
 		{
@@ -142,7 +155,7 @@ namespace ambry
 			if (!is_valid)
 			{
 				size_t offset = key_len + sizeof(size_t) + sizeof(uint32_t);
-				fseek(f, offset, SEEK_SET);
+				fseek(f, offset, SEEK_CUR);
 				continue;
 			}
 
@@ -197,7 +210,7 @@ namespace ambry
 		if (fsize == std::string::npos)
 			return {ResultType::IoFailure, "could not stat one of db files"};
 
-		uint8_t endian = fgetc(f);
+		uint8_t endian = handle_endian(f);
 
 		while (ftell(f) < fsize)
 		{
@@ -216,78 +229,57 @@ namespace ambry
 		fwrite((char*)&n, 1, sizeof(T), stream);
 	}
 
-	Result IoManager::flush_free_list()
-	{
-		FILE *f = m_files[FREE];
-
-		rewind(f);
-
-		fputc(machine_endian(), f);
-
-		for (auto [offset, size] : m_context.free_list)
-		{
-			write_n(offset, f);
-			write_n(size, f);
-		}
-
-		return {};
-	}
-
-	Result IoManager::flush_changelog()
+	void IoManager::flush_changelog()
 	{
 		FILE *dat = m_files[DAT];
-		FILE *idx = m_files[IDX];
 
 		rewind(dat);
-		rewind(idx);
-
-		fputc(machine_endian(), idx);
 
 		uint8_t *data = m_context.data.data();
 
-		std::vector<Changelog> insertions;
-
-		for (auto [idx_offset, changelog] : m_changelog)
-		{	
-			if(changelog.insertion)
-			{
-				insertions.push_back(changelog);
-				goto write_dat;
-			}
-
-			fseek(idx, idx_offset, SEEK_SET);
-
-			fputc(changelog.is_valid, idx);
-
-			fseek(idx, changelog.key.size(), SEEK_SET);
-
-			write_n(changelog.offset, idx);
-			write_n(changelog.length, idx);
-
-   write_dat:
-			if (changelog.is_valid)
-				fwrite(data+changelog.offset, changelog.length, sizeof(uint8_t), dat);
+		for (auto [offset, length] : m_context.changelog)
+		{
+			fseek(dat, offset, SEEK_SET);
+			fwrite(data+offset, length, 1, dat);
 		}
+	}
+
+	void IoManager::insert(Entry &entry)
+	{
+		FILE *idx = m_files[IDX];
 
 		fseek(idx, 0, SEEK_END);
 
-		for (auto changelog : insertions)
-		{
-			write_n((uint16_t)changelog.key.size(), idx);
-			write_n((uint8_t)1, idx);
-			
-			fwrite(changelog.key.data(), changelog.key.size(), sizeof(uint8_t), idx);
+		std::string_view key = entry.first;
+		IndexData data = entry.second;
 
-			write_n(changelog.offset, idx);
-			write_n(changelog.length, idx);
-		}
+		write_n((uint16_t)key.size(), idx);
+		write_n((uint8_t)1, idx);
 
-		return {};
+		fwrite(key.data(), key.size(), sizeof(char), idx);
+
+		write_n(data.offset, idx);
+		write_n(data.length, idx);
 	}
 
-	void IoManager::update(size_t idx_offset, Changelog changelog)
+	void IoManager::erase(Entry &entry)
 	{
-		m_changelog.emplace(idx_offset, changelog);
+		FILE *idx = m_files[IDX];
+
+		fseek(idx, entry.second.idx_offset, SEEK_SET);
+
+		fputc(0, idx);
 	}
 
+	void IoManager::update(Entry &entry)
+	{
+		FILE *idx = m_files[IDX];
+
+		IndexData data = entry.second;
+
+		fseek(idx, data.idx_offset + entry.first.size(), SEEK_SET);
+
+		write_n(data.offset, idx);
+		write_n(data.length, idx);
+	}
 };
