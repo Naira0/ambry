@@ -8,4 +8,6 @@ add_executable(ambry
         lib/db.cpp lib/db.cpp
         lib/cache.hpp lib/cache.cpp
         lib/io_manager.hpp lib/io_manager.cpp
-        lib/types.hpp)
+        lib/types.hpp
+        lib/util.hpp lib/util.cpp
+        lib/transaction.hpp lib/transaction.cpp)

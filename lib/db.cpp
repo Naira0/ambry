@@ -13,6 +13,7 @@
 #include <filesystem>
 
 #include "../fmt.hpp"
+#include "transaction.hpp"
 #include "types.hpp"
 
 #define MALFORMEDIDX(message) {ResultType::MalformedIdx, message}
@@ -110,5 +111,10 @@ namespace ambry
         m_io_manager.update(*iter);
 
         return {};
+    }
+
+    Transaction DB::begin_transaction()
+    {
+        return Transaction(*this);
     }
 }

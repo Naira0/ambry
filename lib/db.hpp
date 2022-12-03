@@ -8,6 +8,7 @@
 #include "cache.hpp"
 #include "io_manager.hpp"
 #include "types.hpp"
+#include "transaction.hpp"
 
 namespace ambry
 {
@@ -35,6 +36,8 @@ namespace ambry
 
         Result erase(const std::string &key);
 
+        Transaction begin_transaction();
+
     public:
         DBContext m_context;
         IoManager m_io_manager;
@@ -44,6 +47,5 @@ namespace ambry
         Result read_data();
 
         Result set_bytes(std::string_view key, const uint8_t *bytes, uint32_t size);
-
     };
 }
