@@ -34,7 +34,7 @@ namespace ambry
 
 		Result open_files();
 
-		Result flush_free_list();
+		void flush_freelist();
 
 		void flush_changelog();
 
@@ -44,10 +44,10 @@ namespace ambry
 
 		void erase(Entry &entry);
 
+		void update_freelist(size_t offset, uint32_t size);
+
 	private:
 		DBContext &m_context;
-
-		
 
 		std::array<FILE*, 3> m_files;
 

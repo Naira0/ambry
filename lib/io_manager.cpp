@@ -220,6 +220,8 @@ namespace ambry
 			m_context.free_list.emplace(offset, length);
 		}
 
+		f = fdopen(f->_fileno, "wb+");
+
 		return {};
 	}
 
@@ -281,5 +283,13 @@ namespace ambry
 
 		write_n(data.offset, idx);
 		write_n(data.length, idx);
+	}
+
+	void IoManager::update_freelist(size_t offset, uint32_t size)
+	{
+		FILE *f = m_files[FREE];
+
+		write_n(offset, f);
+		write_n(size, f);
 	}
 };

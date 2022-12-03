@@ -38,7 +38,13 @@ namespace ambry
 		size_t diff = e_size-size;
 
 		if (diff)
-			m_context.free_list.emplace(offset+size, diff);
+		{
+			size_t new_offset = offset+size;
+
+			m_context.free_list.emplace(new_offset, diff);
+			
+			m_io_manager.update_freelist(new_offset, diff);
+		}
 
 		return offset;
 	}
@@ -83,6 +89,8 @@ namespace ambry
 		}
 
 		m_context.free_list.emplace(offset, size);
+
+		m_io_manager.update_freelist(offset, size);
 	}
 
 	std::optional<std::pair<size_t, size_t>> 

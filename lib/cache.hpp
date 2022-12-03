@@ -10,6 +10,7 @@
 #include <map>
 #include <optional>
 
+#include "io_manager.hpp"
 #include "types.hpp"
 
 namespace ambry
@@ -18,8 +19,9 @@ namespace ambry
 	{
 	public:
 
-		Cache(DBContext &context) :
-			m_context(context)
+		Cache(DBContext &context, IoManager &io_manager) :
+			m_context(context),
+			m_io_manager(io_manager)
 		{}
 
 		size_t write_to_free(std::pair<size_t, size_t> free_entry, const char *bytes, size_t size);;
@@ -38,8 +40,10 @@ namespace ambry
 
 	public:
 		DBContext &m_context;
+		IoManager &m_io_manager;
 
-		std::optional<std::pair<size_t, size_t>> 
+		std::optional<std::pair<size_t, size_t>>
+
 		find_free(size_t size);
 	};
 }

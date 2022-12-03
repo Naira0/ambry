@@ -17,8 +17,8 @@ namespace ambry
     public:
 
         DB(std::string_view name, Options options = {}) :
-            m_data(m_context),
-            m_io_manager(m_context)
+            m_io_manager(m_context),
+            m_data(m_context, m_io_manager)
         {
             m_context.name = name;
             m_context.options = options;
