@@ -13,6 +13,7 @@
 #include <filesystem>
 
 #include "../fmt.hpp"
+#include "types.hpp"
 
 #define MALFORMEDIDX(message) {ResultType::MalformedIdx, message}
 
@@ -73,6 +74,40 @@ namespace ambry
         m_data.free(data.offset, data.length);
 
         m_io_manager.erase(*iter);
+
+        return {};
+    }
+
+    Result DB::update(const std::string &key, std::string_view value)
+    {
+        auto iter = m_context.index.find(key);
+
+        if (iter == m_context.index.end())
+            return {ResultType::KeyNotFound, "key does not exist in index"};
+
+        IndexData &data = iter->second;
+
+        size_t size = value.size();
+
+        data.length = size;
+
+        if (size <= data.length)
+        {
+            m_data.free(data.offset + size, data.length-size);
+            m_data.write_at(data.offset, value.data(), size);
+
+            data.offset = data.offset;
+        }
+        else
+        {
+            m_data.free(data.offset, data.length);
+            data.offset = m_data.write(value.data(), size);
+        }
+
+        // this should ideally not be called here as its not the databases responsibility but skill issue
+        m_context.changelog.emplace(data.offset, size);
+
+        m_io_manager.update(*iter);
 
         return {};
     }

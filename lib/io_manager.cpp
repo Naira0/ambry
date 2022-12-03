@@ -253,9 +253,12 @@ namespace ambry
 		fseek(idx, 0, SEEK_END);
 
 		std::string_view key = entry.first;
-		IndexData data = entry.second;
+		IndexData &data = entry.second;
 
 		write_n((uint16_t)key.size(), idx);
+
+		data.idx_offset = ftell(idx);
+
 		write_n((uint8_t)1, idx);
 
 		fwrite(key.data(), key.size(), sizeof(char), idx);
@@ -279,7 +282,7 @@ namespace ambry
 
 		IndexData data = entry.second;
 
-		fseek(idx, data.idx_offset + entry.first.size(), SEEK_SET);
+		fseek(idx, data.idx_offset + entry.first.size() + 1, SEEK_SET);
 
 		write_n(data.offset, idx);
 		write_n(data.length, idx);

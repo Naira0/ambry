@@ -28,6 +28,8 @@ namespace ambry
 
         Result set(std::string_view key, std::string_view value);
 
+        Result update(const std::string &key, std::string_view value);
+
         std::optional<std::string_view> 
         get(const std::string &key);
 

@@ -42,7 +42,7 @@ namespace ambry
 			size_t new_offset = offset+size;
 
 			m_context.free_list.emplace(new_offset, diff);
-			
+
 			m_io_manager.update_freelist(new_offset, diff);
 		}
 
