@@ -295,4 +295,15 @@ namespace ambry
 		write_n(offset, f);
 		write_n(size, f);
 	}
+
+	void IoManager::write_dat(size_t offset, uint32_t size)
+	{
+		FILE *f = m_files[DAT];
+
+		fseek(f, offset, SEEK_SET);
+
+		auto data = m_context.data.data()+offset;
+		
+		fwrite(data, size, 1, f);
+	}
 };

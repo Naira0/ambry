@@ -107,7 +107,14 @@ namespace ambry
         }
 
         // this should ideally not be called here as its not the databases responsibility but skill issue
-        m_context.changelog.emplace(data.offset, size);
+        if (m_context.options.flush_mode == FlushMode::Constant)
+		{
+			m_io_manager.write_dat(data.offset, size);
+		}
+		else
+		{
+			m_context.changelog.emplace(data.offset, size);
+		}
 
         m_io_manager.update(*iter);
 

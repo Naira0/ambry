@@ -1,6 +1,7 @@
 #include "cache.hpp"
 
 #include "../fmt.hpp"
+#include "types.hpp"
 
 #define WRITE_BACK(b) \
 		for (size_t i = 0; i < size; i++) \
@@ -53,20 +54,27 @@ namespace ambry
 	{
 		auto entry_opt = find_free(size);
 
-		size_t n{};
+		size_t offset{};
 
 		if (entry_opt)
 		{
-			n = write_to_free(entry_opt.value(), bytes, size);
+			offset = write_to_free(entry_opt.value(), bytes, size);
 		}
 		else
 		{
-			n = write_back(bytes, size);
+			offset = write_back(bytes, size);
 		}
 
-		m_context.changelog.emplace(n, size);
+		if (m_context.options.flush_mode == FlushMode::Constant)
+		{
+			m_io_manager.write_dat(offset, size);
+		}
+		else
+		{
+			m_context.changelog.emplace(offset, size);
+		}
 
-		return n;
+		return offset;
 	}
 
 	void Cache::free(size_t offset, size_t size)

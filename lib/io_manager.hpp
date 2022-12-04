@@ -46,6 +46,8 @@ namespace ambry
 
 		void update_freelist(size_t offset, uint32_t size);
 
+		void write_dat(size_t offset, uint32_t size);
+
 	private:
 		DBContext &m_context;
 
