@@ -98,7 +98,7 @@ namespace ambry
 	{
 		for (auto entry : m_context.free_list)
 		{
-			if (entry.second >= size)
+			if (entry.second > size)
 			{
 				return entry;
 			}

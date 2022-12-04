@@ -1,6 +1,7 @@
 #include "db.hpp"
 
 #include <limits>
+#include <stdexcept>
 #include <sys/stat.h>
 #include <sys/file.h>
 
@@ -92,7 +93,7 @@ namespace ambry
 
         data.length = size;
 
-        if (size <= data.length)
+        if (size < data.length)
         {
             m_data.free(data.offset + size, data.length-size);
             m_data.write_at(data.offset, value.data(), size);
@@ -116,5 +117,35 @@ namespace ambry
     Transaction DB::begin_transaction()
     {
         return Transaction(*this);
+    }
+
+    DB::Iterator DB::begin()
+    {
+        return Iterator(m_context.index.begin(), *this);
+    }
+
+    DB::Iterator DB::end()
+    {
+        return Iterator(m_context.index.end(), *this);
+    }
+
+    inline size_t DB::size() const
+    {
+        return m_context.index.size();
+    }
+
+    std::string_view DB::operator[](const std::string &key)
+    {
+        auto opt = get(key);
+
+        if (!opt.has_value())
+            throw std::out_of_range("key does not exist in database index");
+
+        return opt.value();
+    }
+
+    bool DB::contains(const std::string &key) const
+    {
+        return m_context.index.contains(key);
     }
 }
