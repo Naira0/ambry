@@ -54,6 +54,9 @@ namespace ambry
         
         bool disable_cache   = false;
         bool async_flush     = true;
+
+        // periodic flush time
+        int flush_time = 60'000;
 	};
 
     // important shared data

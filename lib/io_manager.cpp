@@ -1,8 +1,12 @@
 #include "io_manager.hpp"
 #include "types.hpp"
+#include <bits/chrono.h>
+#include <chrono>
 #include <cstdint>
 #include <cstdio>
 #include <fcntl.h>
+#include <mutex>
+#include <thread>
 
 #include <algorithm>
 #include <sys/file.h>
@@ -17,7 +21,7 @@ namespace ambry
 {
 	IoManager::~IoManager()
 	{
-		if (m_context.options.flush_mode == FlushMode::OnClose)
+		if (m_context.options.flush_mode != FlushMode::Constant)
 		{
 			flush_changelog();
 		}
@@ -305,5 +309,25 @@ namespace ambry
 		auto data = m_context.data.data()+offset;
 		
 		fwrite(data, size, 1, f);
+	}
+
+	void IoManager::launch_timed_flush()
+	{
+		using namespace std::chrono;
+
+		std::thread 
+		{
+		[&]
+		{
+			while (m_context.options.flush_mode == FlushMode::Periodic)
+			{
+				std::this_thread::sleep_for(milliseconds(m_context.options.flush_time));
+
+				std::scoped_lock lock { m_mutex };
+
+				flush_changelog();
+			}
+		}
+		}.detach();
 	}
 };

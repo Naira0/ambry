@@ -8,6 +8,7 @@
 #include <array>
 
 #include <fcntl.h>
+#include <mutex>
 #include <sys/stat.h>
 #include <sys/file.h>
 #include <unordered_map>
@@ -48,8 +49,11 @@ namespace ambry
 
 		void write_dat(size_t offset, uint32_t size);
 
+		void launch_timed_flush();
+
 	private:
 		DBContext &m_context;
+		std::mutex m_mutex;
 
 		std::array<FILE*, 3> m_files;
 

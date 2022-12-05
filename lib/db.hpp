@@ -15,12 +15,11 @@ namespace ambry
 
         class Iterator;
 
-        DB(std::string_view name, Options options = {}) :
+        DB(std::string_view name) :
             m_io_manager(m_context),
             m_data(m_context, m_io_manager)
         {
             m_context.name = name;
-            m_context.options = options;
         }
 
         Result open();
@@ -45,6 +44,11 @@ namespace ambry
         std::string_view operator[](const std::string &key);
 
         bool contains(const std::string &key) const;
+
+        void flush();
+
+        void set_flush_mode(FlushMode flush_mode);
+        void set_flush_time(int ms);
 
     public:
         DBContext m_context;
