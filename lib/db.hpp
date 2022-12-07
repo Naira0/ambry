@@ -6,6 +6,7 @@
 #include "io_manager.hpp"
 #include "types.hpp"
 #include "transaction.hpp"
+#include "rw.hpp"
 
 namespace ambry
 {
@@ -17,7 +18,7 @@ namespace ambry
 
         DB(std::string_view name) :
             m_io_manager(m_context),
-            m_data(m_context, m_io_manager)
+            m_rw(m_context, m_io_manager)
         {
             m_context.name = name;
         }
@@ -29,6 +30,9 @@ namespace ambry
         Result update(const std::string &key, std::string_view value);
 
         std::optional<std::string_view> 
+        get_cached(const std::string &key);
+
+        std::optional<std::string>
         get(const std::string &key);
 
         Result erase(const std::string &key);
@@ -50,16 +54,21 @@ namespace ambry
         void set_flush_mode(FlushMode flush_mode);
         void set_flush_time(int ms);
 
-    public:
+        void enable_cache(FlushMode flush_mode);
+
+    private:
+        friend Iterator;
+
         DBContext m_context;
         IoManager m_io_manager;
-        Cache m_data;
+        RW m_rw;
 
         Result read_index();
         Result read_data();
 
         Result set_bytes(std::string_view key, const uint8_t *bytes, uint32_t size);
 
+    public:
         class Iterator
         {
         public:
@@ -94,7 +103,14 @@ namespace ambry
             std::pair<std::string_view, std::string_view> 
             operator*()
             {
-                return {m_iter->first, m_db.get(m_iter->first).value_or("no key found")};
+                // if (m_db.m_context.options.enable_cache)
+                // {
+                    return {m_iter->first, m_db.get_cached(m_iter->first).value_or("no key found")};
+                // }
+                // else
+                // {
+                //     return {m_iter->first, m_db.get(m_iter->first)};
+                // }
             }
 
         private:

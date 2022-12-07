@@ -50,68 +50,15 @@ namespace ambry
 		return offset;
 	}
 
-	size_t Cache::write(const char *bytes, size_t size)
+	void Cache::write(const char *bytes, size_t offset, uint32_t size)
 	{
-		auto entry_opt = find_free(size);
-
-		size_t offset{};
-
-		if (entry_opt)
+		if (offset == std::string::npos)
 		{
-			offset = write_to_free(entry_opt.value(), bytes, size);
+			write_back(bytes, size);
 		}
 		else
 		{
-			offset = write_back(bytes, size);
+			write_at(offset, bytes, size);
 		}
-
-		if (m_context.options.flush_mode == FlushMode::Constant)
-		{
-			m_io_manager.write_dat(offset, size);
-		}
-		else
-		{
-			m_context.changelog.emplace(offset, size);
-		}
-
-		return offset;
-	}
-
-	void Cache::free(size_t offset, size_t size)
-	{
-		auto iter = m_context.free_list.find(offset+size);
-
-		if (iter != m_context.free_list.end())
-		{
-			size += iter->second;
-			m_context.free_list.erase(iter);
-		}
-
-		iter = m_context.free_list.find(offset-size);
-
-		if (iter != m_context.free_list.end())
-		{
-			offset -= size;
-			size += iter->second;
-			m_context.free_list.erase(iter);
-		}
-
-		m_context.free_list.emplace(offset, size);
-
-		m_io_manager.update_freelist(offset, size);
-	}
-
-	std::optional<std::pair<size_t, size_t>> 
-	Cache::find_free(size_t size)
-	{
-		for (auto entry : m_context.free_list)
-		{
-			if (entry.second > size)
-			{
-				return entry;
-			}
-		}
-
-		return std::nullopt;
 	}
 }

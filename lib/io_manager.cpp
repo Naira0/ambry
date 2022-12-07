@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <sys/file.h>
+#include <sys/stat.h>
 
 #include "../fmt.hpp"
 
@@ -241,13 +242,14 @@ namespace ambry
 
 		rewind(dat);
 
-		uint8_t *data = m_context.data.data();
+		auto data = (const char*)m_context.data.data();
 
 		for (auto [offset, length] : m_context.changelog)
 		{
-			fseek(dat, offset, SEEK_SET);
-			fwrite(data+offset, length, 1, dat);
+			write_dat(data+offset, offset, length);
 		}
+
+		m_context.changelog.clear();
 	}
 
 	void IoManager::insert(Entry &entry)
@@ -300,15 +302,41 @@ namespace ambry
 		write_n(size, f);
 	}
 
-	void IoManager::write_dat(size_t offset, uint32_t size)
+	size_t IoManager::write_dat(const char *bytes, size_t offset, uint32_t size)
+	{
+		FILE *f = m_files[DAT];
+
+		if (offset == std::string::npos)
+		{
+			fseek(f, 0, SEEK_END);
+			offset = ftell(f);
+		}
+
+		fseek(f, offset, SEEK_SET);
+
+		fwrite(bytes, size, 1, f);
+
+		return offset;
+	}
+
+	std::string IoManager::read_dat(size_t offset, uint32_t size)
 	{
 		FILE *f = m_files[DAT];
 
 		fseek(f, offset, SEEK_SET);
 
 		auto data = m_context.data.data()+offset;
+
+		std::string buff;
+
+		buff.reserve(size+1);
 		
-		fwrite(data, size, 1, f);
+		for (uint32_t i = 0; i < size; i++)
+		{
+			buff += fgetc(f);
+		}
+
+		return buff;
 	}
 
 	void IoManager::launch_timed_flush()

@@ -27,7 +27,7 @@ namespace ambry
 		size_t write_to_free(std::pair<size_t, size_t> free_entry, const char *bytes, size_t size);;
 
 		// writes n bytes to cache and returns the starting offset of the bytes written
-		size_t write(const char *bytes, size_t size);
+		void write(const char *bytes, size_t offset, uint32_t size);
 
 		// writes at the end of the cache and returns the starting offset
 		size_t write_back(const char *bytes, size_t size);

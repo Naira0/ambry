@@ -50,10 +50,10 @@ namespace ambry
 
 	struct Options
 	{
-		FlushMode flush_mode = FlushMode::OnClose;
+		FlushMode flush_mode = FlushMode::Constant;
         
-        bool disable_cache   = false;
-        bool async_flush     = true;
+        bool enable_cache = false;
+        bool async_flush  = true;
 
         // periodic flush time
         int flush_time = 60'000;
@@ -67,7 +67,7 @@ namespace ambry
         std::map<size_t, uint32_t> free_list;
         Options options;
         std::string name;
-        std::map<size_t, size_t> changelog;
+        std::multimap<size_t, size_t> changelog;
 
         DBContext() = default;
     };

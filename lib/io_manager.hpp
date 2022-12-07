@@ -9,8 +9,6 @@
 
 #include <fcntl.h>
 #include <mutex>
-#include <sys/stat.h>
-#include <sys/file.h>
 #include <unordered_map>
 
 namespace ambry
@@ -47,7 +45,9 @@ namespace ambry
 
 		void update_freelist(size_t offset, uint32_t size);
 
-		void write_dat(size_t offset, uint32_t size);
+		size_t write_dat(const char *bytes, size_t offset, uint32_t size);
+
+		std::string read_dat(size_t offset, uint32_t size);
 
 		void launch_timed_flush();
 

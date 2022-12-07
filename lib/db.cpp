@@ -19,15 +19,16 @@
 
 namespace ambry
 {
-
     Result DB::open()
     {
         return m_io_manager.load_structures();
     }
 
     std::optional<std::string_view>
-    DB::get(const std::string &key)
+    DB::get_cached(const std::string &key)
     {
+        assert(m_context.options.enable_cache && "caching must be turned on to use this function");
+
         auto iter = m_context.index.find(key);
 
         if (iter == m_context.index.end())
@@ -40,22 +41,34 @@ namespace ambry
         return std::string_view{(char*)cache, data.length};
     }
 
+    std::optional<std::string>
+    DB::get(const std::string &key)
+    {
+        auto iter = m_context.index.find(key);
+
+        if (iter == m_context.index.end())
+            return {};
+
+        IndexData data = iter->second;
+        
+        return m_io_manager.read_dat(data.offset, data.length);
+    }
+
     Result DB::set(std::string_view key, std::string_view value)
     {
-        auto iter = m_context.index.emplace(key, IndexData{});
+        auto [pair, emplaced] = m_context.index.emplace(key, IndexData{});
 
-        if (!iter.second)
+        if (!emplaced)
             return {ResultType::KeyNotInserted, "Could not insert key into index"};
 
-        uint32_t size = value.size();
-        size_t offset = m_data.write(value.data(), size);
+        size_t offset = m_rw.write(value);
 
-        IndexData &data = iter.first->second;
+        IndexData &data = pair->second;
 
         data.offset = offset;
-        data.length = size;
+        data.length = value.size();
 
-        m_io_manager.insert(*iter.first);
+        m_io_manager.insert(*pair);
 
         return {};
     }
@@ -71,7 +84,7 @@ namespace ambry
 
         m_context.index.erase(iter);
 
-        m_data.free(data.offset, data.length);
+        m_rw.free(data.offset, data.length);
 
         m_io_manager.erase(*iter);
 
@@ -87,32 +100,8 @@ namespace ambry
 
         IndexData &data = iter->second;
 
-        size_t size = value.size();
-
-        data.length = size;
-
-        if (size < data.length)
-        {
-            m_data.free(data.offset + size, data.length-size);
-            m_data.write_at(data.offset, value.data(), size);
-
-            data.offset = data.offset;
-        }
-        else
-        {
-            m_data.free(data.offset, data.length);
-            data.offset = m_data.write(value.data(), size);
-        }
-
-        // this should ideally not be called here as its not the databases responsibility but skill issue
-        if (m_context.options.flush_mode == FlushMode::Constant)
-		{
-			m_io_manager.write_dat(data.offset, size);
-		}
-		else
-		{
-			m_context.changelog.emplace(data.offset, size);
-		}
+        data.offset = m_rw.update(data.offset, data.length, value);
+        data.length = value.size();
 
         m_io_manager.update(*iter);
 
@@ -141,7 +130,7 @@ namespace ambry
 
     std::string_view DB::operator[](const std::string &key)
     {
-        auto opt = get(key);
+        auto opt = get_cached(key);
 
         if (!opt.has_value())
             throw std::out_of_range("key does not exist in database index");
@@ -168,8 +157,11 @@ namespace ambry
         else if (flush_mode == FlushMode::Constant)
         {
             m_io_manager.flush_changelog();
+
             m_context.data.clear();
             m_context.data.shrink_to_fit();
+
+            m_context.options.enable_cache = false;
         }
 
         m_context.options.flush_mode = flush_mode;
@@ -178,5 +170,14 @@ namespace ambry
     void DB::set_flush_time(int ms)
     {
         m_context.options.flush_time = ms;
+    }
+
+    void DB::enable_cache(FlushMode flush_mode)
+    {
+        assert(flush_mode != FlushMode::Constant && "constant flushing conflicts with cache mode");
+
+        m_context.options.enable_cache = true;
+
+        set_flush_mode(flush_mode);
     }
 }
