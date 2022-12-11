@@ -28,28 +28,6 @@ namespace ambry
 		}
 	}
 
-	size_t Cache::write_to_free(std::pair<size_t, size_t> free_entry, const char *bytes, size_t size)
-	{
-		auto [offset, e_size] = free_entry;
-
-		write_at(offset, bytes, size);
-
-		m_context.free_list.erase(offset);
-
-		size_t diff = e_size-size;
-
-		if (diff)
-		{
-			size_t new_offset = offset+size;
-
-			m_context.free_list.emplace(new_offset, diff);
-
-			m_io_manager.update_freelist(new_offset, diff);
-		}
-
-		return offset;
-	}
-
 	void Cache::write(const char *bytes, size_t offset, uint32_t size)
 	{
 		if (offset == std::string::npos)

@@ -10,6 +10,7 @@
 #include <fcntl.h>
 #include <mutex>
 #include <unordered_map>
+#include <atomic>
 
 namespace ambry
 {
@@ -55,7 +56,7 @@ namespace ambry
 		DBContext &m_context;
 		std::mutex m_mutex;
 
-		std::array<FILE*, 3> m_files;
+		std::array<int, 3> m_files;
 
 		const std::array<std::string_view, 3> m_file_ext 
 		{

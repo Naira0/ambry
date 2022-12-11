@@ -93,9 +93,6 @@ namespace ambry
 		m_io_manager.update_freelist(offset, size);
 	}
 
-	
-		
-
 	void RW::set_changelog(size_t offset, uint32_t size)
 	{
 		auto &changelog = m_context.changelog;

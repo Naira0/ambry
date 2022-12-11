@@ -180,4 +180,9 @@ namespace ambry
 
         set_flush_mode(flush_mode);
     }
+
+    void DB::reserve(size_t size)
+    {
+        m_context.data.reserve(size);
+    }
 }

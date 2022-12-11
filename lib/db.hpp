@@ -16,11 +16,16 @@ namespace ambry
 
         class Iterator;
 
-        DB(std::string_view name) :
+        DB(std::string_view name, Options options = {}) :
             m_io_manager(m_context),
             m_rw(m_context, m_io_manager)
         {
             m_context.name = name;
+            m_context.options = options;
+        }
+
+        ~DB()
+        {
         }
 
         Result open();
@@ -56,7 +61,9 @@ namespace ambry
 
         void enable_cache(FlushMode flush_mode);
 
-    private:
+        void reserve(size_t size);
+
+    public:
         friend Iterator;
 
         DBContext m_context;

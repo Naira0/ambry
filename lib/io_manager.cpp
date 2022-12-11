@@ -11,6 +11,8 @@
 #include <algorithm>
 #include <sys/file.h>
 #include <sys/stat.h>
+#include <unistd.h>
+#include <sys/uio.h>
 
 #include "../fmt.hpp"
 
@@ -29,8 +31,8 @@ namespace ambry
 
 		for (auto f : m_files)
 		{
-			flock(f->_fileno, LOCK_UN);
-			fclose(f);
+			flock(f, LOCK_UN);
+			close(f);
 		}
 	}
 
@@ -42,17 +44,14 @@ namespace ambry
 
 			std::string name = (m_context.name + ext.data());
 
-			FILE *f = fopen(name.c_str(), "rb+");
+			int f = open(name.c_str(), O_NONBLOCK | O_RDWR | O_CREAT, 0777);
 
-			if (!f)
+			if (f == -1)
 			{
-				f = fopen(name.c_str(), "wb+");
-
-				if (!f)
-					return {ResultType::IoFailure, "could not open one of db files"};
+				return {ResultType::IoFailure, "could not open one of db files"};
 			}
 
-			flock(f->_fileno, LOCK_EX);
+			flock(f, LOCK_EX);
 
 			m_files[i] = f;
 		}
@@ -86,17 +85,26 @@ namespace ambry
 		return ((char*)&i)[0];
 	}
 
+	char read_byte(int fd)
+	{
+		char buff[1];
+		read(fd, buff, 1);
+		return *buff;
+	}
+
+	int write_byte(int fd, char byte)
+	{
+		return write(fd, &byte, 1);
+	}
+
 	template<class T>
-	T read_n(FILE *stream, uint8_t endian)
+	T read_n(int fd, uint8_t endian)
 	{
 		T n{};
 
 		auto bytes = (char*)&n;
 
-		for (T i = 0; i < sizeof(T); i++)
-		{
-			bytes[i] = fgetc(stream);
-		}
+		read(fd, bytes, sizeof(T));
 
 		if (machine_endian() != endian)
 		{
@@ -108,24 +116,29 @@ namespace ambry
 		return n;
 	}
 
-	size_t stat_f(int fd)
+	size_t get_fsize(int fd)
 	{
 		struct stat st;
 
-		if (fstat(fd, &st) != 0)
+		if (fstat(fd, &st) == -1)
 			return std::string::npos;
 
 		return st.st_size;
 	}
 
-	uint8_t handle_endian(FILE *f)
+	uint8_t handle_endian(int fd)
 	{
-		uint8_t endian = fgetc(f);
+		uint8_t endian = read_byte(fd);
 
-		fseek(f, -1, SEEK_CUR);
-		fputc(machine_endian(), f);
+		lseek(fd, -1, SEEK_CUR);
+		write_byte(fd, machine_endian());
 
 		return endian;
+	}
+
+	int curr_offset(int fd)
+	{
+		return lseek(fd, 0, SEEK_CUR);
 	}
 
 	/*
@@ -138,43 +151,42 @@ namespace ambry
 	*/
 	Result IoManager::load_index()
 	{
-		FILE *f = m_files[IDX];
+		int fd = m_files[IDX];
 
-		size_t fsize = stat_f(f->_fileno);
+		size_t fsize = get_fsize(fd);
 
 		if (fsize == std::string::npos)
+		{
 			return {ResultType::IoFailure, "could not stat one of db files"};
+		}
 
-		uint8_t endian = handle_endian(f);
+		uint8_t endian = handle_endian(fd);
 
-		while (ftell(f) < fsize)
+		while (curr_offset(fd) < fsize)
 		{
 			IndexData data;
 
-			auto key_len = read_n<uint16_t>(f, endian);
+			auto key_len = read_n<uint16_t>(fd, endian);
 
-			data.idx_offset = ftell(f);
+			data.idx_offset = curr_offset(fd);
 
-			uint8_t is_valid = fgetc(f);
+			uint8_t is_valid = read_byte(fd);
 
 			if (!is_valid)
 			{
 				size_t offset = key_len + sizeof(size_t) + sizeof(uint32_t);
-				fseek(f, offset, SEEK_CUR);
+				lseek(fd, offset, SEEK_CUR);
 				continue;
 			}
 
 			std::string key;
 
-			key.reserve(key_len+1);
+			key.resize(key_len);
 
-			for (uint16_t i = 0; i < key_len; i++)
-			{
-				key += fgetc(f);
-			}
+			pread(fd, key.data(), key_len, data.idx_offset+1);
 
-			data.offset = read_n<size_t>(f, endian);
-			data.length = read_n<uint32_t>(f, endian);
+			data.offset = read_n<size_t>(fd, endian);
+			data.length = read_n<uint32_t>(fd, endian);
 
 			m_context.index.emplace(std::move(key), data);
 		}
@@ -184,19 +196,17 @@ namespace ambry
 
 	Result IoManager::load_dat()
 	{
-		FILE *f = m_files[DAT];
+		int fd = m_files[DAT];
 
-		size_t fsize = stat_f(f->_fileno);
+		size_t fsize = get_fsize(fd);
 
 		if (fsize == std::string::npos)
 			return {ResultType::IoFailure, "could not stat one of db files"};
 
 		m_context.data.reserve(fsize * 2);
+		m_context.data.resize(fsize);
 
-		for (size_t i = 0; i < fsize; i++)
-		{
-			m_context.data.emplace_back(fgetc(f));
-		}
+		read(fd, m_context.data.data(), fsize);
 
 		return {};
 	}
@@ -208,39 +218,39 @@ namespace ambry
 	*/
 	Result IoManager::load_free()
 	{
-		FILE *f = m_files[FREE];
+		int fd = m_files[FREE];
 
-		size_t fsize = stat_f(f->_fileno);
+		size_t fsize = get_fsize(fd);
 
 		if (fsize == std::string::npos)
 			return {ResultType::IoFailure, "could not stat one of db files"};
 
-		uint8_t endian = handle_endian(f);
+		uint8_t endian = handle_endian(fd);
 
-		while (ftell(f) < fsize)
+		while (curr_offset(fd) < fsize)
 		{
-			auto offset = read_n<size_t>(f, endian);
-			auto length = read_n<uint32_t>(f, endian);
+			auto offset = read_n<size_t>(fd, endian);
+			auto length = read_n<uint32_t>(fd, endian);
 
 			m_context.free_list.emplace(offset, length);
 		}
 
-		f = fdopen(f->_fileno, "wb+");
+		ftruncate(fd, 0);
 
 		return {};
 	}
 
 	template<class T>
-	void write_n(T n, FILE *stream)
+	void write_n(T n, int fd)
 	{
-		fwrite((char*)&n, 1, sizeof(T), stream);
+		write(fd, (char*)&n, sizeof(T));
 	}
 
 	void IoManager::flush_changelog()
 	{
-		FILE *dat = m_files[DAT];
+		int fd = m_files[DAT];
 
-		rewind(dat);
+		lseek(fd, 0, SEEK_SET);
 
 		auto data = (const char*)m_context.data.data();
 
@@ -252,89 +262,106 @@ namespace ambry
 		m_context.changelog.clear();
 	}
 
+	template<class T>
+	iovec* append_vec(T n, iovec *iov)
+	{
+		iov->iov_base = (char*)&n;
+		iov->iov_len  = sizeof(T);
+		return ++iov;
+	}
+
+	template<class T>
+	iovec to_iovec(T n)
+	{
+		return 
+		{
+			.iov_base = (char*)&n,
+			.iov_len  = sizeof(T)
+		};
+	}
+
 	void IoManager::insert(Entry &entry)
 	{
-		FILE *idx = m_files[IDX];
-
-		fseek(idx, 0, SEEK_END);
+		int fd = m_files[IDX];
+		
+		lseek(fd, 0, SEEK_END);
 
 		std::string_view key = entry.first;
 		IndexData &data = entry.second;
 
-		write_n((uint16_t)key.size(), idx);
+		data.idx_offset = curr_offset(fd)+2;
 
-		data.idx_offset = ftell(idx);
+		constexpr int n = 5;
 
-		write_n((uint8_t)1, idx);
+		uint16_t len = key.size();
+		char b[1] = {1};
 
-		fwrite(key.data(), key.size(), sizeof(char), idx);
-
-		write_n(data.offset, idx);
-		write_n(data.length, idx);
+		iovec iov[n]
+		{
+			{(char*)&len, 2},
+			{(void*)b, 1},
+			{(void*)key.data(), key.size()},
+			{(char*)&data.offset, 8},
+			{(char*)&data.length, 4}
+		};
+		
+		writev(fd, iov, n);
 	}
 
 	void IoManager::erase(Entry &entry)
 	{
-		FILE *idx = m_files[IDX];
+		int fd = m_files[IDX];
 
-		fseek(idx, entry.second.idx_offset, SEEK_SET);
+		lseek(fd, entry.second.idx_offset, SEEK_SET);
 
-		fputc(0, idx);
+		write_byte(fd, 0);
 	}
 
 	void IoManager::update(Entry &entry)
 	{
-		FILE *idx = m_files[IDX];
+		int fd = m_files[IDX];
 
 		IndexData data = entry.second;
 
-		fseek(idx, data.idx_offset + entry.first.size() + 1, SEEK_SET);
+		lseek(fd, data.idx_offset + entry.first.size() + 1, SEEK_SET);
 
-		write_n(data.offset, idx);
-		write_n(data.length, idx);
+		write_n(data.offset, fd);
+		write_n(data.length, fd);
 	}
 
 	void IoManager::update_freelist(size_t offset, uint32_t size)
 	{
-		FILE *f = m_files[FREE];
+		int fd = m_files[FREE];
 
-		write_n(offset, f);
-		write_n(size, f);
+		write_n(offset, fd);
+		write_n(size, fd);
 	}
 
 	size_t IoManager::write_dat(const char *bytes, size_t offset, uint32_t size)
 	{
-		FILE *f = m_files[DAT];
+		int fd = m_files[DAT];
 
 		if (offset == std::string::npos)
 		{
-			fseek(f, 0, SEEK_END);
-			offset = ftell(f);
+			offset = lseek(fd, 0, SEEK_END);
 		}
 
-		fseek(f, offset, SEEK_SET);
-
-		fwrite(bytes, size, 1, f);
+		pwrite(fd, bytes, size, offset);
 
 		return offset;
 	}
 
 	std::string IoManager::read_dat(size_t offset, uint32_t size)
 	{
-		FILE *f = m_files[DAT];
-
-		fseek(f, offset, SEEK_SET);
+		int fd = m_files[DAT];
 
 		auto data = m_context.data.data()+offset;
 
 		std::string buff;
 
-		buff.reserve(size+1);
-		
-		for (uint32_t i = 0; i < size; i++)
-		{
-			buff += fgetc(f);
-		}
+		buff.resize(size);
+
+		pread(fd, buff.data(), size, offset);
 
 		return buff;
 	}
