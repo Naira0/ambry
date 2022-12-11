@@ -231,10 +231,13 @@ namespace ambry
 			auto offset = read_n<size_t>(fd, endian);
 			auto length = read_n<uint32_t>(fd, endian);
 
+			if (offset == 0 && length == 0)
+			{
+				continue;
+			}
+
 			m_context.free_list.emplace(offset, length);
 		}
-
-		ftruncate(fd, 0);
 
 		return {};
 	}
@@ -307,9 +310,20 @@ namespace ambry
 		pwritev(fd, iov, 2, data.idx_offset + entry.first.size() + 1);
 	}
 
-	void IoManager::update_freelist(size_t offset, uint32_t size)
+	void IoManager::erase_freelist(uint64_t offset)
 	{
 		int fd = m_files[FREE];
+
+		static const char data[12]{};
+
+		pwrite(fd, data, 12, offset);
+	}
+
+	size_t IoManager::update_freelist(size_t offset, uint32_t size)
+	{
+		int fd = m_files[FREE];
+
+		size_t n = lseek(fd, 0, SEEK_END);
 
 		iovec iov[]
 		{
@@ -318,6 +332,8 @@ namespace ambry
 		};
 
 		writev(fd, iov, 2);
+
+		return n;
 	}
 
 	size_t IoManager::write_dat(const char *bytes, size_t offset, uint32_t size)

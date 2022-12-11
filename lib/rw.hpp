@@ -34,9 +34,9 @@ namespace ambry
 		void set_changelog(size_t offset, uint32_t size);
 
 		// TODO make sure it also erases the freelist in the .free file
-		size_t manage_free(std::pair<size_t, size_t> entry, size_t data_size);
+		size_t manage_free(std::pair<uint32_t, FreeEntry> entry, size_t data_size);
 
-		std::optional<std::pair<size_t, size_t>> 
+		std::optional<std::pair<uint32_t, FreeEntry>> 
 		find_free(size_t size);
 		
 	};

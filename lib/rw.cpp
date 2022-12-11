@@ -1,4 +1,6 @@
 #include "rw.hpp"
+#include "types.hpp"
+#include <cstdint>
 
 namespace ambry
 {
@@ -71,26 +73,26 @@ namespace ambry
 
 	void RW::free(size_t offset, size_t size)
 	{
-		auto iter = m_context.free_list.find(offset+size);
+		// auto iter = m_context.free_list.find(offset+size);
 
-		if (iter != m_context.free_list.end())
-		{
-			size += iter->second;
-			m_context.free_list.erase(iter);
-		}
+		// if (iter != m_context.free_list.end())
+		// {
+		// 	size += iter->first;
+		// 	m_context.free_list.erase(iter);
+		// }
 
-		iter = m_context.free_list.find(offset-size);
+		// iter = m_context.free_list.find(offset-size);
 
-		if (iter != m_context.free_list.end())
-		{
-			offset -= size;
-			size += iter->second;
-			m_context.free_list.erase(iter);
-		}
+		// if (iter != m_context.free_list.end())
+		// {
+		// 	offset -= size;
+		// 	size += iter->first;
+		// 	m_context.free_list.erase(iter);
+		// }
 
-		m_context.free_list.emplace(offset, size);
+		uint32_t off = m_io_manager.update_freelist(offset, size);
 
-		m_io_manager.update_freelist(offset, size);
+		m_context.free_list.emplace(size, FreeEntry{offset, off});
 	}
 
 	void RW::set_changelog(size_t offset, uint32_t size)
@@ -107,32 +109,33 @@ namespace ambry
 		changelog.emplace(offset, size);
 	}
 
-	size_t RW::manage_free(std::pair<size_t, size_t> entry, size_t data_size)
+	size_t RW::manage_free(std::pair<uint32_t, FreeEntry> entry, size_t data_size)
 	{
-		auto [offset, e_size] = entry;
+		auto [size, free] = entry;
 
-		m_context.free_list.erase(offset);
+		m_context.free_list.erase(size);
+		m_io_manager.erase_freelist(free.free_list_offset);
 
-		size_t diff = e_size-data_size;
+		size_t diff = size-data_size;
 
 		if (diff)
 		{
-			size_t new_offset = offset+data_size;
+			size_t new_offset = free.offset+data_size;
 
-			m_context.free_list.emplace(new_offset, diff);
+			uint32_t off = m_io_manager.update_freelist(new_offset, diff);
 
-			m_io_manager.update_freelist(new_offset, diff);
+			auto iter = m_context.free_list.emplace(diff, FreeEntry{new_offset, off});
 		}
 
-		return offset;
+		return free.offset;
 	}
 
-	std::optional<std::pair<size_t, size_t>> 
+	std::optional<std::pair<uint32_t, FreeEntry>> 
 	RW::find_free(size_t size)
 	{
 		for (auto entry : m_context.free_list)
 		{
-			if (entry.second > size)
+			if (entry.first > size)
 			{
 				return entry;
 			}

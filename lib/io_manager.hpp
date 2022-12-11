@@ -44,7 +44,9 @@ namespace ambry
 
 		void erase(Entry &entry);
 
-		void update_freelist(size_t offset, uint32_t size);
+		size_t update_freelist(size_t offset, uint32_t size);
+
+		void erase_freelist(uint64_t offset);
 
 		size_t write_dat(const char *bytes, size_t offset, uint32_t size);
 

@@ -15,7 +15,7 @@ namespace ambry
 
 		auto bytes = (char*)&n;
 
-		return std::string{bytes, sizeof(T)};
+		return {bytes, sizeof(T)};
 	}
 
 	template<class T>
