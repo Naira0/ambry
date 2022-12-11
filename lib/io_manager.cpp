@@ -3,7 +3,6 @@
 #include <bits/chrono.h>
 #include <chrono>
 #include <cstdint>
-#include <cstdio>
 #include <fcntl.h>
 #include <mutex>
 #include <thread>
@@ -183,7 +182,7 @@ namespace ambry
 
 			key.resize(key_len);
 
-			pread(fd, key.data(), key_len, data.idx_offset+1);
+			read(fd, key.data(), key_len);
 
 			data.offset = read_n<size_t>(fd, endian);
 			data.length = read_n<uint32_t>(fd, endian);
@@ -299,7 +298,7 @@ namespace ambry
 		iovec iov[n]
 		{
 			{(char*)&len, 2},
-			{(void*)b, 1},
+			{b, 1},
 			{(void*)key.data(), key.size()},
 			{(char*)&data.offset, 8},
 			{(char*)&data.length, 4}
@@ -354,8 +353,6 @@ namespace ambry
 	std::string IoManager::read_dat(size_t offset, uint32_t size)
 	{
 		int fd = m_files[DAT];
-
-		auto data = m_context.data.data()+offset;
 
 		std::string buff;
 
