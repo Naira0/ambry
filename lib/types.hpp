@@ -34,7 +34,7 @@ namespace ambry
 
      struct IndexData
     {
-        size_t offset;
+        uint64_t offset;
         uint32_t length;
         // the offset of the raw record in the .idx file
         uint32_t idx_offset;
@@ -64,10 +64,10 @@ namespace ambry
     {
         std::unordered_map<std::string, IndexData> index;
         std::vector<uint8_t> data;
-        std::map<size_t, uint32_t> free_list;
+        std::map<uint64_t, uint32_t> free_list;
         Options options;
         std::string name;
-        std::multimap<size_t, size_t> changelog;
+        std::multimap<uint64_t, uint32_t> changelog;
 
         DBContext() = default;
     };

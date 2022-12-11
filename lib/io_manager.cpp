@@ -173,7 +173,7 @@ namespace ambry
 
 			if (!is_valid)
 			{
-				size_t offset = key_len + sizeof(size_t) + sizeof(uint32_t);
+				uint64_t offset = key_len + sizeof(uint64_t) + sizeof(uint32_t);
 				lseek(fd, offset, SEEK_CUR);
 				continue;
 			}
@@ -184,7 +184,7 @@ namespace ambry
 
 			read(fd, key.data(), key_len);
 
-			data.offset = read_n<size_t>(fd, endian);
+			data.offset = read_n<uint64_t>(fd, endian);
 			data.length = read_n<uint32_t>(fd, endian);
 
 			m_context.index.emplace(std::move(key), data);
@@ -239,12 +239,6 @@ namespace ambry
 		return {};
 	}
 
-	template<class T>
-	void write_n(T n, int fd)
-	{
-		write(fd, (char*)&n, sizeof(T));
-	}
-
 	void IoManager::flush_changelog()
 	{
 		int fd = m_files[DAT];
@@ -259,24 +253,6 @@ namespace ambry
 		}
 
 		m_context.changelog.clear();
-	}
-
-	template<class T>
-	iovec* append_vec(T n, iovec *iov)
-	{
-		iov->iov_base = (char*)&n;
-		iov->iov_len  = sizeof(T);
-		return ++iov;
-	}
-
-	template<class T>
-	iovec to_iovec(T n)
-	{
-		return 
-		{
-			.iov_base = (char*)&n,
-			.iov_len  = sizeof(T)
-		};
 	}
 
 	void IoManager::insert(Entry &entry)
@@ -322,18 +298,26 @@ namespace ambry
 
 		IndexData data = entry.second;
 
-		lseek(fd, data.idx_offset + entry.first.size() + 1, SEEK_SET);
+		iovec iov[]
+		{
+			{(char*)&data.offset, 8},
+			{(char*)&data.length, 4}
+		};
 
-		write_n(data.offset, fd);
-		write_n(data.length, fd);
+		pwritev(fd, iov, 2, data.idx_offset + entry.first.size() + 1);
 	}
 
 	void IoManager::update_freelist(size_t offset, uint32_t size)
 	{
 		int fd = m_files[FREE];
 
-		write_n(offset, fd);
-		write_n(size, fd);
+		iovec iov[]
+		{
+			{(char*)&offset, 8},
+			{(char*)&size, 4}
+		};
+
+		writev(fd, iov, 2);
 	}
 
 	size_t IoManager::write_dat(const char *bytes, size_t offset, uint32_t size)

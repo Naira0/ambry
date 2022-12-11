@@ -4,21 +4,22 @@
 #include <cstring>
 #include <string_view>
 #include <type_traits>
+#include <string>
 
 namespace ambry
 {
 	template<class T>
-	std::string_view make_slice(T n)
+	std::string to_bytes(T n)
 	{
 		static_assert(std::is_arithmetic<T>(), "T is not an arithmetic type");
 
 		auto bytes = (char*)&n;
 
-		return std::string_view{bytes, sizeof(T)};
+		return std::string{bytes, sizeof(T)};
 	}
 
 	template<class T>
-	T slice_to(std::string_view slice)
+	T bytes_to(std::string_view slice)
 	{
 		static_assert(std::is_arithmetic<T>(), "T is not an arithmetic type");
 

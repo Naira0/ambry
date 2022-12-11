@@ -110,19 +110,21 @@ namespace ambry
             std::pair<std::string_view, std::string_view> 
             operator*()
             {
-                // if (m_db.m_context.options.enable_cache)
-                // {
-                    return {m_iter->first, m_db.get_cached(m_iter->first).value_or("no key found")};
-                // }
-                // else
-                // {
-                //     return {m_iter->first, m_db.get(m_iter->first)};
-                // }
+                if (m_db.m_context.options.enable_cache)
+                {
+                    return {m_iter->first, m_db.get_cached(m_iter->first).value()};
+                }
+                else
+                {
+                    auto value = m_cached_strings.emplace_back(m_db.get(m_iter->first).value());
+                    return {m_iter->first, value};
+                }
             }
 
         private:
-            std::unordered_map<std::string, IndexData>::iterator 
+            std::unordered_map<std::string, IndexData>::iterator
             m_iter;
+            std::vector<std::string> m_cached_strings;
             DB &m_db;
         };
     };
