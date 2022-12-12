@@ -24,11 +24,9 @@ namespace ambry
             m_context.options = options;
         }
 
-        ~DB()
-        {
-        }
-
         Result open();
+
+        void close();
 
         Result set(std::string_view key, std::string_view value);
 
@@ -54,16 +52,11 @@ namespace ambry
 
         bool contains(const std::string &key) const;
 
-        void flush();
-
-        void set_flush_mode(FlushMode flush_mode);
-        void set_flush_time(int ms);
-
-        void enable_cache(FlushMode flush_mode);
-
         void reserve(size_t size);
 
-    public:
+        void switch_cache(bool on);
+
+    private:
         friend Iterator;
 
         DBContext m_context;

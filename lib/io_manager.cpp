@@ -1,19 +1,14 @@
 #include "io_manager.hpp"
 #include "types.hpp"
-#include <bits/chrono.h>
-#include <chrono>
+
 #include <cstdint>
 #include <fcntl.h>
-#include <mutex>
-#include <thread>
 
 #include <algorithm>
 #include <sys/file.h>
 #include <sys/stat.h>
-#include <unistd.h>
 #include <sys/uio.h>
-
-#include "../fmt.hpp"
+#include <unistd.h>
 
 /*
 	the first byte of all database files (except .dat) should be either 0 or 1 to determine endianness of the data
@@ -23,11 +18,11 @@ namespace ambry
 {
 	IoManager::~IoManager()
 	{
-		if (m_context.options.flush_mode != FlushMode::Constant)
-		{
-			flush_changelog();
-		}
+		cleanup();
+	}
 
+	void IoManager::cleanup()
+	{
 		for (auto f : m_files)
 		{
 			flock(f, LOCK_UN);
@@ -242,22 +237,6 @@ namespace ambry
 		return {};
 	}
 
-	void IoManager::flush_changelog()
-	{
-		int fd = m_files[DAT];
-
-		lseek(fd, 0, SEEK_SET);
-
-		auto data = (const char*)m_context.data.data();
-
-		for (auto [offset, length] : m_context.changelog)
-		{
-			write_dat(data+offset, offset, length);
-		}
-
-		m_context.changelog.clear();
-	}
-
 	void IoManager::insert(Entry &entry)
 	{
 		int fd = m_files[IDX];
@@ -363,23 +342,4 @@ namespace ambry
 		return buff;
 	}
 
-	void IoManager::launch_timed_flush()
-	{
-		using namespace std::chrono;
-
-		std::thread 
-		{
-		[&]
-		{
-			while (m_context.options.flush_mode == FlushMode::Periodic)
-			{
-				std::this_thread::sleep_for(milliseconds(m_context.options.flush_time));
-
-				std::scoped_lock lock { m_mutex };
-
-				flush_changelog();
-			}
-		}
-		}.detach();
-	}
 };

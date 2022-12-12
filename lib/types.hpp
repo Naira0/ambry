@@ -46,23 +46,9 @@ namespace ambry
         uint32_t free_list_offset;
     };
 
-	enum class FlushMode : uint8_t
-	{
-		Constant,
-		OnClose,
-        Periodic,
-        Never,
-	};
-
 	struct Options
 	{
-		FlushMode flush_mode = FlushMode::Constant;
-        
         bool enable_cache = false;
-        bool async_flush  = true;
-
-        // periodic flush time
-        int flush_time = 60'000;
 	};
 
     // important shared data
@@ -73,8 +59,7 @@ namespace ambry
         std::multimap<uint32_t, FreeEntry> free_list;
         Options options;
         std::string name;
-        std::multimap<uint64_t, uint32_t> changelog;
-
+        
         DBContext() = default;
     };
 }

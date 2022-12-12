@@ -2,6 +2,8 @@
 
 // read-write class that manages writing and reading from and to the cache and on disk files
 
+#include <optional>
+
 #include "cache.hpp"
 #include "io_manager.hpp"
 #include "types.hpp"
@@ -30,8 +32,6 @@ namespace ambry
 		Options &m_options;
 		IoManager &m_io_manager;
 		Cache m_cache;
-
-		void set_changelog(size_t offset, uint32_t size);
 
 		// TODO make sure it also erases the freelist in the .free file
 		size_t manage_free(std::pair<uint32_t, FreeEntry> entry, size_t data_size);

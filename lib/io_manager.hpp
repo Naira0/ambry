@@ -4,13 +4,9 @@
 
 #include "types.hpp"
 #include <cstdint>
-#include <cstdio>
 #include <array>
 
 #include <fcntl.h>
-#include <mutex>
-#include <unordered_map>
-#include <atomic>
 
 namespace ambry
 {
@@ -34,9 +30,9 @@ namespace ambry
 
 		Result open_files();
 
-		void flush_freelist();
+		void cleanup();
 
-		void flush_changelog();
+		void flush_freelist();
 
 		void insert(Entry &entry);
 
@@ -51,19 +47,6 @@ namespace ambry
 		size_t write_dat(const char *bytes, size_t offset, uint32_t size);
 
 		std::string read_dat(size_t offset, uint32_t size);
-
-		void launch_timed_flush();
-
-	private:
-		DBContext &m_context;
-		std::mutex m_mutex;
-
-		std::array<int, 3> m_files;
-
-		const std::array<std::string_view, 3> m_file_ext 
-		{
-			".dat", ".idx", ".free"
-		};
 
 		/*
 			the index file format is as follows:
@@ -83,6 +66,15 @@ namespace ambry
 			4 bytes for the length
 		*/
 		Result load_free();
-		
+
+	private:
+		DBContext &m_context;
+
+		std::array<int, 3> m_files;
+
+		const std::array<std::string_view, 3> m_file_ext 
+		{
+			".dat", ".idx", ".free"
+		};
 	};
 }

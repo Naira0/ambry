@@ -18,14 +18,7 @@ namespace ambry
 			offset = manage_free(free_opt.value(), size);
 		}
 
-		if (m_options.flush_mode == FlushMode::Constant)
-		{
-			offset = m_io_manager.write_dat(data, offset, size);
-		}
-		else
-		{
-			set_changelog(offset, size);
-		}
+		offset = m_io_manager.write_dat(data, offset, size);
 
 		if (m_options.enable_cache)
 		{
@@ -54,15 +47,9 @@ namespace ambry
 			}
 		}
 
-		if (m_context.options.flush_mode == FlushMode::Constant)
-		{
-			offset = m_io_manager.write_dat(slice.data(), offset, size);
-		}
-		else
-		{
-			set_changelog(offset, size);
-		}
-
+		
+		offset = m_io_manager.write_dat(slice.data(), offset, size);
+		
 		if (m_options.enable_cache)
 		{
 			m_cache.write_at(offset, slice.data(), size);
@@ -93,20 +80,6 @@ namespace ambry
 		uint32_t off = m_io_manager.update_freelist(offset, size);
 
 		m_context.free_list.emplace(size, FreeEntry{offset, off});
-	}
-
-	void RW::set_changelog(size_t offset, uint32_t size)
-	{
-		auto &changelog = m_context.changelog;
-
-		auto iter = changelog.find(offset);
-
-		if (offset != std::string::npos && iter != changelog.end())
-		{
-			changelog.erase(iter);
-		}
-
-		changelog.emplace(offset, size);
 	}
 
 	size_t RW::manage_free(std::pair<uint32_t, FreeEntry> entry, size_t data_size)

@@ -1,6 +1,5 @@
 #include "cache.hpp"
 
-#include "../fmt.hpp"
 #include "types.hpp"
 
 #define WRITE_BACK(b) \

@@ -1,17 +1,7 @@
 #include "db.hpp"
 
-#include <limits>
 #include <stdexcept>
-#include <sys/stat.h>
-#include <sys/file.h>
-
-#include <cstdio>
-#include <cctype>
 #include <cassert>
-#include <cstring>
-
-#include <charconv>
-#include <filesystem>
 
 #include "../fmt.hpp"
 #include "transaction.hpp"
@@ -22,6 +12,17 @@ namespace ambry
     Result DB::open()
     {
         return m_io_manager.load_structures();
+    }
+
+    void DB::close()
+    {
+        m_io_manager.cleanup();
+
+        m_context.data.clear();
+        m_context.data.shrink_to_fit();
+
+		m_context.index.clear();
+		m_context.free_list.clear();
     }
 
     std::optional<std::string_view>
@@ -143,46 +144,22 @@ namespace ambry
         return m_context.index.contains(key);
     }
 
-    void DB::flush()
-    {
-        m_io_manager.flush_changelog();
-    }
-
-    void DB::set_flush_mode(FlushMode flush_mode)
-    {
-        if (flush_mode == FlushMode::Periodic)
-        {
-            m_io_manager.launch_timed_flush();
-        }
-        else if (flush_mode == FlushMode::Constant)
-        {
-            m_io_manager.flush_changelog();
-
-            m_context.data.clear();
-            m_context.data.shrink_to_fit();
-
-            m_context.options.enable_cache = false;
-        }
-
-        m_context.options.flush_mode = flush_mode;
-    }
-
-    void DB::set_flush_time(int ms)
-    {
-        m_context.options.flush_time = ms;
-    }
-
-    void DB::enable_cache(FlushMode flush_mode)
-    {
-        assert(flush_mode != FlushMode::Constant && "constant flushing conflicts with cache mode");
-
-        m_context.options.enable_cache = true;
-
-        set_flush_mode(flush_mode);
-    }
-
     void DB::reserve(size_t size)
     {
         m_context.data.reserve(size);
+    }
+
+    void DB::switch_cache(bool on)
+    {
+        if (on)
+        {
+            m_context.options.enable_cache = true;
+            m_io_manager.load_dat();
+        }
+        else
+        {
+            m_context.data.clear();
+            m_context.data.shrink_to_fit();
+        }
     }
 }
