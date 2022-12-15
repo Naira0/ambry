@@ -24,11 +24,19 @@ namespace ambry
 			m_context(context)
 		{}
 
+		IoManager(IoManager &&im, DBContext &context) :
+			m_context(context),
+			m_files(std::move(im.m_files)),
+			m_file_ext(std::move(im.m_file_ext))
+		{}
+
 		~IoManager();
 
 		Result load_structures();
 
 		Result open_files();
+
+		Result destroy();
 
 		void cleanup();
 

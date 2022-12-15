@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <iostream>
 #include <string_view>
 #include <unordered_map>
 #include <map>
@@ -18,6 +19,8 @@ namespace ambry
         KeyNotInserted,
         EraseFailure,
         KeyNotFound,
+        ParseError,
+        InterpretError,
     };
 
     struct Result
@@ -61,5 +64,21 @@ namespace ambry
         std::string name;
         
         DBContext() = default;
+
+        DBContext(DBContext &&ctx) :
+            index(std::move(ctx.index)),
+            data(std::move(ctx.data)),
+            free_list(std::move(ctx.free_list)),
+            options(ctx.options),
+            name(std::move(ctx.name))
+        {}
+
+        DBContext(const DBContext &ctx) :
+            index(ctx.index),
+            data(ctx.data),
+            free_list(ctx.free_list),
+            options(ctx.options),
+            name(ctx.name)
+        {}
     };
 }

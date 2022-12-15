@@ -5,6 +5,7 @@
 #include <fcntl.h>
 
 #include <algorithm>
+#include <iostream>
 #include <sys/file.h>
 #include <sys/stat.h>
 #include <sys/uio.h>
@@ -28,6 +29,23 @@ namespace ambry
 			flock(f, LOCK_UN);
 			close(f);
 		}
+	}
+
+	Result IoManager::destroy()
+	{
+		cleanup();
+
+		for (auto ext : m_file_ext)
+		{
+			std::string name = m_context.name + ext.data();
+
+			if (unlink(name.c_str()) != 0)
+			{
+				return {ResultType::IoFailure, "could not delete db file"};
+			}
+		}
+
+		return {};
 	}
 
 	Result IoManager::open_files()

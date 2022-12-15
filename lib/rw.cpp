@@ -20,7 +20,7 @@ namespace ambry
 
 		offset = m_io_manager.write_dat(data, offset, size);
 
-		if (m_options.enable_cache)
+		if (m_context.options.enable_cache)
 		{
 			m_cache.write(data, offset, size);
 		}
@@ -50,7 +50,7 @@ namespace ambry
 		
 		offset = m_io_manager.write_dat(slice.data(), offset, size);
 		
-		if (m_options.enable_cache)
+		if (m_context.options.enable_cache)
 		{
 			m_cache.write_at(offset, slice.data(), size);
 		}

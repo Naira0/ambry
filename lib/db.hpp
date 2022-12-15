@@ -7,6 +7,7 @@
 #include "types.hpp"
 #include "transaction.hpp"
 #include "rw.hpp"
+#include <iostream>
 
 namespace ambry
 {
@@ -24,9 +25,23 @@ namespace ambry
             m_context.options = options;
         }
 
+        DB(DB &&db) :
+            m_context(std::move(db.m_context)),
+            m_io_manager(std::move(db.m_io_manager), m_context),
+            m_rw(std::move(db.m_rw), m_context, m_io_manager)
+        {}
+
+        DB(const DB &db) :
+            m_context(db.m_context),
+            m_io_manager(db.m_io_manager),
+            m_rw(db.m_rw)
+        {}
+
         Result open();
 
         void close();
+
+        Result destroy();
 
         Result set(std::string_view key, std::string_view value);
 
@@ -40,21 +55,25 @@ namespace ambry
 
         Result erase(const std::string &key);
 
-        Transaction begin_transaction();
+        inline Transaction begin_transaction();
 
-        Iterator begin();
+        inline Iterator begin();
 
-        Iterator end();
+        inline Iterator end();
 
         inline size_t size() const;
 
         std::string_view operator[](const std::string &key);
 
-        bool contains(const std::string &key) const;
+        inline bool contains(const std::string &key) const;
 
-        void reserve(size_t size);
+        inline void reserve(size_t size);
 
         void switch_cache(bool on);
+
+        std::string_view name() const;
+        
+        bool is_cached() const;
 
     private:
         friend Iterator;

@@ -3,7 +3,6 @@
 #include <stdexcept>
 #include <cassert>
 
-#include "../fmt.hpp"
 #include "transaction.hpp"
 #include "types.hpp"
 
@@ -23,6 +22,11 @@ namespace ambry
 
 		m_context.index.clear();
 		m_context.free_list.clear();
+    }
+
+    Result DB::destroy()
+    {
+        return m_io_manager.destroy();
     }
 
     std::optional<std::string_view>
@@ -131,7 +135,7 @@ namespace ambry
 
     std::string_view DB::operator[](const std::string &key)
     {
-        auto opt = get_cached(key);
+        auto opt = get(key);
 
         if (!opt.has_value())
             throw std::out_of_range("key does not exist in database index");
@@ -161,5 +165,15 @@ namespace ambry
             m_context.data.clear();
             m_context.data.shrink_to_fit();
         }
+    }
+
+    std::string_view DB::name() const
+    {
+        return m_context.name;
+    }
+
+    bool DB::is_cached() const
+    {
+        return m_context.options.enable_cache;
     }
 }

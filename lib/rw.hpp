@@ -17,8 +17,19 @@ namespace ambry
 		RW(DBContext &context, IoManager &io_manager) :
 			m_context(context),
 			m_io_manager(io_manager),
-			m_cache(context, m_io_manager),
-			m_options(m_context.options)
+			m_cache(context, m_io_manager)
+		{}
+
+		RW(RW &&rw, DBContext &ctx, IoManager &im) :
+			m_context(ctx),
+			m_io_manager(im),
+			m_cache(rw.m_cache)
+		{}
+
+		RW(const RW &rw) :
+			m_context(rw.m_context),
+			m_io_manager(rw.m_io_manager),
+			m_cache(rw.m_cache)
 		{}
 
 		size_t write(std::string_view slice);
@@ -29,7 +40,6 @@ namespace ambry
 
 	private:
 		DBContext &m_context;
-		Options &m_options;
 		IoManager &m_io_manager;
 		Cache m_cache;
 
