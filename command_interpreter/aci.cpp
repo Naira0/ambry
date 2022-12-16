@@ -147,6 +147,9 @@ namespace aci
 			db.close();
 		}
 
+		inter.wdb = nullptr;
+		inter.dbt.clear();
+
 		return {};
 	}
 
@@ -170,7 +173,7 @@ namespace aci
 	ambry::Result destroy_all_cb(Interpreter &inter, Cmd &cmd)
 	{
 
-		for (auto [_, db] : inter.dbt)
+		for (auto &[_, db] : inter.dbt)
 		{
 			ambry::Result result = db.destroy();
 
@@ -178,12 +181,11 @@ namespace aci
 			{
 				return result;
 			}
-
-			if (&db == inter.wdb)
-			{
-				inter.wdb = nullptr;
-			}
 		}
+
+		inter.dbt.clear();
+
+		inter.wdb = nullptr;
 
 		return {};
 	}
@@ -221,6 +223,18 @@ namespace aci
 		return inter.wdb->erase(cmd.args.front());
 	}
 
+	ambry::Result list_open_cb(Interpreter &inter, Cmd &cmd)
+	{
+		fmt::println("name - size");
+
+		for (auto &[_, db] : inter.dbt)
+		{
+			fmt::println("{} - {}", db.name(), db.size());
+		}
+
+		return {};
+	}
+
 	void Interpreter::init_commands()
 	{
 		ct["open"] = 
@@ -247,6 +261,7 @@ namespace aci
 			.description = "switches the current database to one with the give arguments name",
 			.usage = " [db_name]",
 			.fn = switch_cb,
+			.expect_wdb = false,
 		};
 
 		ct["cache_mode"] = 
@@ -254,7 +269,7 @@ namespace aci
 			.arity = 1,
 			.description = "turns the cache mode either on or off",
 			.usage = " <on/off>",
-			.fn = switch_cb,
+			.fn = cache_mode_cb,
 		};
 
 		ct["set"] = 
@@ -319,6 +334,15 @@ namespace aci
 			.description = "displays all commands",
 			.usage = "",
 			.fn = cmds_cb,
+			.expect_wdb = false,
+		};
+
+		ct["list_open"] = 
+		{
+			.arity = 0,
+			.description = "displays all open databases",
+			.usage = "",
+			.fn = list_open_cb,
 			.expect_wdb = false,
 		};
 	}

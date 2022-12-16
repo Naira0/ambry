@@ -128,7 +128,7 @@ namespace ambry
         return Iterator(m_context.index.end(), *this);
     }
 
-    inline size_t DB::size() const
+    size_t DB::size() const
     {
         return m_context.index.size();
     }
