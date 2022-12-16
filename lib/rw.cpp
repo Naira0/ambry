@@ -18,12 +18,12 @@ namespace ambry
 			offset = manage_free(free_opt.value(), size);
 		}
 
-		offset = m_io_manager.write_dat(data, offset, size);
-
 		if (m_context.options.enable_cache)
 		{
 			m_cache.write(data, offset, size);
 		}
+
+		offset = m_io_manager.write_dat(data, offset, size);
 
 		return offset;
 	}
@@ -46,7 +46,6 @@ namespace ambry
 				offset = manage_free(free_opt.value(), size);
 			}
 		}
-
 		
 		offset = m_io_manager.write_dat(slice.data(), offset, size);
 		

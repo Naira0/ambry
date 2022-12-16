@@ -55,19 +55,19 @@ namespace ambry
 
         Result erase(const std::string &key);
 
-        inline Transaction begin_transaction();
+        Transaction begin_transaction();
 
-        inline Iterator begin();
+        Iterator begin();
 
-        inline Iterator end();
+        Iterator end();
 
-        inline size_t size() const;
+        size_t size() const;
 
         std::string_view operator[](const std::string &key);
 
-        inline bool contains(const std::string &key) const;
+        bool contains(const std::string &key) const;
 
-        inline void reserve(size_t size);
+        void reserve(size_t size);
 
         void switch_cache(bool on);
 
