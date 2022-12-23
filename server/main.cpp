@@ -9,11 +9,21 @@ int main()
 {
 	Server server({
 		.service   = "3000",
-		.opt_name  = SO_REUSEADDR,
 		.sock_act  = SockAct::Bind,
-		.verbose   = true,
 		.log_transports = LOG_FILE | LOG_STDOUT
 	});
 
 	server.start();
+
+	server.listen();
+
+	while (true)
+	{
+		auto messages = server.recv_all(-1);
+
+		for (auto &m : messages)
+		{
+			fmt::print("{}", m.message);
+		}
+	}
 }

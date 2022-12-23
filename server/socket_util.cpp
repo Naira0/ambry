@@ -123,3 +123,21 @@ ConInfo init(SockOpt opt)
 
 	return ci;
 }
+
+std::pair<std::string, int> recv(int fd)
+{
+	std::string buff;
+
+	buff.resize(1024);
+
+	int got = recv(fd, buff.data(), buff.size(), 0);
+
+	if (got == -1)
+	{
+		return {{}, -1};
+	}
+	
+	buff.resize(got);
+
+	return {buff, got};
+}
