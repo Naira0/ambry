@@ -124,11 +124,11 @@ ConInfo init(SockOpt opt)
 	return ci;
 }
 
-std::pair<std::string, int> recv(int fd)
+std::pair<std::string, int> recv(int fd, size_t max_size)
 {
 	std::string buff;
 
-	buff.resize(1024);
+	buff.resize(max_size);
 
 	int got = recv(fd, buff.data(), buff.size(), 0);
 
@@ -140,4 +140,52 @@ std::pair<std::string, int> recv(int fd)
 	buff.resize(got);
 
 	return {buff, got};
+}
+
+std::pair<std::string, int> recvall(int fd, size_t size)
+{
+	std::string buff;
+
+	buff.resize(size);
+
+	int 
+		got{},
+		n,
+		left = buff.size();
+
+	while (got < size)
+	{
+		n = recv(fd, buff.data()+got, left, 0);
+
+		if (n == -1)
+		{
+			return {{}, -1};
+		}
+
+		got += n;
+		left -= n;
+	}
+
+	return {buff, got};
+}
+
+int send(std::string_view message, int fd)
+{
+	int sent{};
+	int n{};
+	int size = message.size();
+	
+	while (sent < size)
+	{
+		n = send(fd, message.data()+sent, size-sent, 0);
+
+		if (n == -1)
+		{
+			break;
+		}
+
+		sent += n;
+	}
+
+	return sent;
 }

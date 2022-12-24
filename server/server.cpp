@@ -3,6 +3,7 @@
 #include <arpa/inet.h>
 
 #include <cstring>
+#include <fcntl.h>
 #include <sys/epoll.h>
 
 #define LOG(level, message, ...) \
@@ -40,6 +41,7 @@ void Server::listen()
 	{
 		LOG_ERRNO(fatal);
 	}
+
 
 	m_listener = std::thread
 	{
@@ -82,7 +84,7 @@ void Server::listen()
 	};
 }
 
-std::vector<Incoming> Server::recv_all(int timeout)
+std::vector<Incoming> Server::recv_from_all(int timeout)
 {
 	std::vector<epoll_event> events;
 
@@ -108,17 +110,66 @@ std::vector<Incoming> Server::recv_all(int timeout)
 	{
 		int fd = events[i].data.fd;
 
-		auto message = recv(fd);
+		auto u32 = events[i].data.u32;
 
-		if (message.second == -1)
+		auto [m, n] = recvall(fd, 4);
+
+		if (n <= 0)
 		{
 			LOG_ERRNO(warn);
 			epoll_ctl(m_epoll_fd, EPOLL_CTL_DEL, fd, nullptr);
 			continue;
 		}
 
-		messages.emplace_back(Incoming { std::move(message.first), fd });
+		auto len_bytes = m.substr(0, 4);
+		auto len = *(uint32_t*)len_bytes.data();
+
+		auto [data, n2] = recvall(fd, len);
+
+		messages.emplace_back(Incoming { std::move(data), fd });
 	}
 
 	return messages;
+}
+
+void Server::stop()
+{
+	m_running = false;
+
+	if (m_listener.joinable())
+	{
+		m_listener.join();
+	}
+}
+
+void Server::close()
+{
+	stop();
+
+	::close(m_ci.fd);
+	::close(m_epoll_fd);
+}
+
+void Server::command_loop(aci::Interpreter &inter)
+{
+	while (true)
+	{
+		auto messages = recv_from_all(500);
+
+		for (auto &[m, fd] : messages)
+		{	
+			LOG(info, "recieved message: {}", m);
+
+			auto cmd = aci::parse(m);
+
+			if (!cmd)
+			{
+				continue;
+			}
+
+			ambry::Result result = inter.interpret(cmd.value());
+
+			send(result.message, fd);
+		}
+	}
 }

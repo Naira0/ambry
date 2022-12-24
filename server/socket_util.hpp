@@ -58,4 +58,7 @@ int get_port(int fd);
 
 void* in_addr(sockaddr *addr);
 
-std::pair<std::string, int> recv(int fd);
+std::pair<std::string, int> recv(int fd, size_t max_size = 1024);
+std::pair<std::string, int> recvall(int fd, size_t size);
+
+int send(std::string_view message, int fd);

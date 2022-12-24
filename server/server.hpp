@@ -8,6 +8,8 @@
 #include "socket_util.hpp"
 #include "log.hpp"
 
+#include "aci.hpp"
+
 struct Incoming
 {
 	std::string message;
@@ -23,6 +25,11 @@ public:
 		m_lgr(m_opt.log_transports, "server.log")
 	{}
 
+	~Server()
+	{
+		close();
+	}
+
 	void start();
 
 	inline ConInfo info() const
@@ -32,8 +39,13 @@ public:
 
 	void listen();
 
-	std::vector<Incoming> recv_all(int timeout = -1);
+	void stop();
+
+	void close();
+
+	std::vector<Incoming> recv_from_all(int timeout = -1);
 	
+	void command_loop(aci::Interpreter &inter);
 
 	inline int fd() const
 	{

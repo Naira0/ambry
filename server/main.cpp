@@ -1,9 +1,17 @@
 #include "fmt.hpp"
 #include "db.hpp"
+#include "aci.hpp"
 
 #include "log.hpp"
 #include "server.hpp"
 #include "socket_util.hpp"
+#include <cstdint>
+
+ambry::Result quit_cb(aci::Interpreter &inter, aci::Cmd &cmd)
+{
+	inter.running = false;
+	return {};
+}
 
 int main()
 {
@@ -17,13 +25,19 @@ int main()
 
 	server.listen();
 
-	while (true)
-	{
-		auto messages = server.recv_all(-1);
+	aci::DBTable dt;
 
-		for (auto &m : messages)
-		{
-			fmt::print("{}", m.message);
-		}
-	}
+	aci::Interpreter inter(dt);
+
+	inter.init_commands();
+
+	inter.ct["quit"] =
+	{
+		.description = "closes the server",
+		.usage = "",
+		.fn = quit_cb,
+		.expect_wdb = false,
+	};
+
+	server.command_loop(inter);
 }
