@@ -14,14 +14,20 @@ def connect():
 
 	return s
 
-def send_input(s: socket):
+def send_input(s: socket.socket):
 	message = input()
 	data = len(message).to_bytes(4, byteorder) + message.encode()
 	s.sendall(data)
 
-def get_input(s: socket):
-	data = s.recv(100).decode()
-	print(data)
+def get_input(s: socket.socket):
+	data = s.recv(5)
+
+	status_code = data[0]
+	res_len = int.from_bytes(data[1:5], byteorder)
+
+	data = s.recv(res_len)
+
+	print(f"{status_code}; {data.decode()}")
 
 def command_loop():
 

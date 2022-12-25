@@ -1,4 +1,5 @@
 #include "server.hpp"
+#include "aci.hpp"
 
 #include <arpa/inet.h>
 
@@ -153,6 +154,27 @@ void Server::close()
 	::close(m_epoll_fd);
 }
 
+/*
+	one byte for the status code
+	four bytes for the length of the message
+	then the message
+*/
+std::string construct_responce(const aci::Result &result)
+{
+	std::string buff;
+
+	buff.resize(5 + result.message.size());
+
+	buff[0] = (uint8_t)result.type;
+
+	uint32_t size = result.message.size();
+
+	memcpy(buff.data()+1, (char*)&size, 4);
+	memcpy(buff.data()+5, result.message.data(), result.message.size());
+
+	return buff;
+}
+
 void Server::command_loop(aci::Interpreter &inter)
 {
 	while (true)
@@ -174,7 +196,7 @@ void Server::command_loop(aci::Interpreter &inter)
 			{
 				aci::Result result = inter.interpret(c);
 
-				send(result.message, fd);
+				send(construct_responce(result), fd);
 			}
 		}
 	}

@@ -7,11 +7,13 @@
 #include "socket_util.hpp"
 #include <cstdint>
 
-ambry::Result quit_cb(aci::Interpreter &inter, aci::Cmd &cmd)
+aci::Result quit_cb(aci::Ctx &ctx)
 {
-	inter.running = false;
+	ctx.inter.running = false;
 	return {};
 }
+
+// 0 0000 message
 
 int main()
 {

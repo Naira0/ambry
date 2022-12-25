@@ -46,7 +46,9 @@ namespace aci
 
 		ctx.inter.wdb = &iter->second;
 
-		return TO_RES(ctx.inter.wdb->open());
+		auto res = ctx.inter.wdb->open();
+
+		return TO_RES(res);
 	}
 
 	Result close_cb(Ctx &ctx)
@@ -210,7 +212,7 @@ namespace aci
 				arg_count = std::to_string(ch.arity);
 			}
 
-			output += fmt::format("- {}({}):\n\tDescription: {}\n\tUsage: {}{}",
+			output += fmt::format("- {}({}):\n\tDescription: {}\n\tUsage: {}{}\n",
 					  cmd, arg_count, ch.description, cmd, ch.usage);
 		}
 
@@ -234,7 +236,7 @@ namespace aci
 
 		for (auto &[_, db] : ctx.inter.dbt)
 		{
-			output += fmt::format("{} - {}", db.name(), db.size());
+			output += fmt::format("{} - {}\n", db.name(), db.size());
 		}
 
 		return {{}, output};
