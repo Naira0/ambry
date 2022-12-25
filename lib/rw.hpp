@@ -23,13 +23,13 @@ namespace ambry
 		RW(RW &&rw, DBContext &ctx, IoManager &im) :
 			m_context(ctx),
 			m_io_manager(im),
-			m_cache(rw.m_cache)
+			m_cache(ctx, im)
 		{}
 
-		RW(const RW &rw) :
+		RW(const RW &rw, DBContext &ctx, IoManager &im) :
 			m_context(rw.m_context),
 			m_io_manager(rw.m_io_manager),
-			m_cache(rw.m_cache)
+			m_cache(ctx, im)
 		{}
 
 		size_t write(std::string_view slice);

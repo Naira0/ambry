@@ -70,7 +70,7 @@ void Server::listen()
 				epoll_event event;
 
 				event.data.fd = cfd;
-				event.events = EPOLLIN;
+				event.events = EPOLLIN | EPOLLRDHUP;
 
 				int status = epoll_ctl(m_epoll_fd, EPOLL_CTL_ADD, cfd, &event);
 
@@ -110,14 +110,17 @@ std::vector<Incoming> Server::recv_from_all(int timeout)
 	{
 		int fd = events[i].data.fd;
 
-		auto u32 = events[i].data.u32;
+		if (events[i].events & EPOLLRDHUP)
+		{
+			epoll_ctl(m_epoll_fd, EPOLL_CTL_DEL, fd, nullptr);
+			continue;
+		}
 
 		auto [m, n] = recvall(fd, 4);
 
 		if (n <= 0)
 		{
 			LOG_ERRNO(warn);
-			epoll_ctl(m_epoll_fd, EPOLL_CTL_DEL, fd, nullptr);
 			continue;
 		}
 
@@ -154,7 +157,7 @@ void Server::command_loop(aci::Interpreter &inter)
 {
 	while (true)
 	{
-		auto messages = recv_from_all(500);
+		auto messages = recv_from_all(-1);
 
 		for (auto &[m, fd] : messages)
 		{	
@@ -162,14 +165,17 @@ void Server::command_loop(aci::Interpreter &inter)
 
 			auto cmd = aci::parse(m);
 
-			if (!cmd)
+			if (cmd.empty())
 			{
 				continue;
 			}
 
-			ambry::Result result = inter.interpret(cmd.value());
+			for (auto &c : cmd)
+			{
+				aci::Result result = inter.interpret(c);
 
-			send(result.message, fd);
+				send(result.message, fd);
+			}
 		}
 	}
 }

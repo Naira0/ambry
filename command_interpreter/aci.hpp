@@ -23,7 +23,15 @@ namespace aci
 
 	class Interpreter;
 
-	typedef ambry::Result(*CmdFN)(Interpreter&, Cmd&);
+	using Result = ambry::BasicResult<std::string>;
+
+	struct Ctx
+	{
+		Interpreter &inter;
+		Cmd &cmd;
+	};
+
+	typedef Result(*CmdFN)(Ctx&);
 
 	struct CmdHandle
 	{
@@ -57,8 +65,8 @@ namespace aci
 
 		void init_commands();
 
-		ambry::Result interpret(Cmd &cmd);
+		Result interpret(Cmd &cmd);
 	};
 
-	std::optional<Cmd> parse(std::string_view source);
+	std::vector<Cmd> parse(std::string_view source);
 }

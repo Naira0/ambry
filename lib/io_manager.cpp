@@ -11,6 +11,8 @@
 #include <sys/uio.h>
 #include <unistd.h>
 
+#include <aio.h>
+
 /*
 	the first byte of all database files (except .dat) should be either 0 or 1 to determine endianness of the data
 */
@@ -37,7 +39,7 @@ namespace ambry
 
 		for (auto ext : m_file_ext)
 		{
-			std::string name = m_context.name + ext.data();
+			std::string name = m_ctx.name + ext.data();
 
 			if (unlink(name.c_str()) != 0)
 			{
@@ -54,7 +56,7 @@ namespace ambry
 		{
 			std::string_view ext = m_file_ext[i];
 
-			std::string name = (m_context.name + ext.data());
+			std::string name = (m_ctx.name + ext.data());
 
 			int f = open(name.c_str(), O_NONBLOCK | O_RDWR | O_CREAT, 0777);
 
@@ -200,7 +202,7 @@ namespace ambry
 			data.offset = read_n<uint64_t>(fd, endian);
 			data.length = read_n<uint32_t>(fd, endian);
 
-			m_context.index.emplace(std::move(key), data);
+			m_ctx.index.emplace(std::move(key), data);
 		}
 
 		return {};
@@ -215,10 +217,10 @@ namespace ambry
 		if (fsize == std::string::npos)
 			return {ResultType::IoFailure, "could not stat one of db files"};
 
-		m_context.data.reserve(fsize * 2);
-		m_context.data.resize(fsize);
+		m_ctx.data.reserve(fsize * 2);
+		m_ctx.data.resize(fsize);
 
-		read(fd, m_context.data.data(), fsize);
+		read(fd, m_ctx.data.data(), fsize);
 
 		return {};
 	}
@@ -241,6 +243,8 @@ namespace ambry
 
 		while (curr_offset(fd) < fsize)
 		{
+			uint32_t free_list_offset = lseek(fd, 0, SEEK_CUR);
+
 			auto offset = read_n<size_t>(fd, endian);
 			auto length = read_n<uint32_t>(fd, endian);
 
@@ -249,7 +253,7 @@ namespace ambry
 				continue;
 			}
 
-			m_context.free_list.emplace(offset, length);
+			m_ctx.free_list.emplace(length, FreeEntry{offset, free_list_offset});
 		}
 
 		return {};
@@ -279,7 +283,7 @@ namespace ambry
 			{(char*)&data.offset, 8},
 			{(char*)&data.length, 4}
 		};
-		
+
 		writev(fd, iov, n);
 	}
 

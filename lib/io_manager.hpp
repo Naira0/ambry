@@ -21,11 +21,11 @@ namespace ambry
 		};
 
 		IoManager(DBContext &context) :
-			m_context(context)
+			m_ctx(context)
 		{}
 
 		IoManager(IoManager &&im, DBContext &context) :
-			m_context(context),
+			m_ctx(context),
 			m_files(std::move(im.m_files)),
 			m_file_ext(std::move(im.m_file_ext))
 		{}
@@ -76,7 +76,7 @@ namespace ambry
 		Result load_free();
 
 	private:
-		DBContext &m_context;
+		DBContext &m_ctx;
 
 		std::array<int, 3> m_files;
 

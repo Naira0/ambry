@@ -4,10 +4,10 @@ an extendible command interpreter library made for the cli and the server.
 ## Usage
 ```cpp
 
-// parses a raw command and returns an optional containing aci::Cmd
+// parses a raw command and returns a vector of commands (commands are newline seperated)
 auto cmd = aci::parse("set my_key \"some value\"");
 
-if (!cmd)
+if (cmd.empty())
 {
 	// handle error
 }

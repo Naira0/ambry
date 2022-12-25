@@ -18,22 +18,22 @@ namespace ambry
         class Iterator;
 
         DB(std::string_view name, Options options = {}) :
-            m_io_manager(m_context),
-            m_rw(m_context, m_io_manager)
+            m_im(m_ctx),
+            m_rw(m_ctx, m_im)
         {
-            m_context.name = name;
-            m_context.options = options;
+            m_ctx.name = name;
+            m_ctx.options = options;
         }
 
         DB(DB &&db) :
-            m_context(std::move(db.m_context)),
-            m_io_manager(std::move(db.m_io_manager), m_context),
-            m_rw(std::move(db.m_rw), m_context, m_io_manager)
+            m_ctx(std::move(db.m_ctx)),
+            m_im(std::move(db.m_im), m_ctx),
+            m_rw(std::move(db.m_rw), m_ctx, m_im)
         {}
 
         DB(const DB &db) :
-            m_context(db.m_context),
-            m_io_manager(db.m_io_manager),
+            m_ctx(db.m_ctx),
+            m_im(db.m_im),
             m_rw(db.m_rw)
         {}
 
@@ -78,8 +78,8 @@ namespace ambry
     private:
         friend Iterator;
 
-        DBContext m_context;
-        IoManager m_io_manager;
+        DBContext m_ctx;
+        IoManager m_im;
         RW m_rw;
 
         Result read_index();
@@ -122,7 +122,7 @@ namespace ambry
             std::pair<std::string_view, std::string_view> 
             operator*()
             {
-                if (m_db.m_context.options.enable_cache)
+                if (m_db.m_ctx.options.enable_cache)
                 {
                     return {m_iter->first, m_db.get_cached(m_iter->first).value()};
                 }

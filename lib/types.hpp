@@ -23,10 +23,11 @@ namespace ambry
         InterpretError,
     };
 
-    struct Result
+    template<class T>
+    struct BasicResult
     {
         ResultType type = ResultType::Ok;
-        std::string_view message;
+        T message;
 
         [[nodiscard]]
         inline bool ok() const
@@ -34,6 +35,8 @@ namespace ambry
             return type == ResultType::Ok;
         }
     };
+
+    using Result = BasicResult<std::string_view>;
 
     struct IndexData
     {

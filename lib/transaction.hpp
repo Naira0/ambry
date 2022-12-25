@@ -8,14 +8,14 @@ namespace ambry
 
 	class Transaction
 	{
-		enum class CommandType
+		enum class CmdType
 		{
 			Set, Update, Erase,
 		};
 
 		struct Command
 		{
-			CommandType type;
+			CmdType type;
 			std::string_view a1;
 			std::string_view a2;
 		};
@@ -23,6 +23,16 @@ namespace ambry
 	public:
 		Transaction(DB &db) :
 			m_db(db)
+		{}
+
+		Transaction(Transaction &&tr) :
+			m_db(tr.m_db),
+			m_cmds(std::move(tr.m_cmds))
+		{}
+
+		Transaction(const Transaction &tr) :
+			m_db(tr.m_db),
+			m_cmds(tr.m_cmds)
 		{}
 
         Transaction& set(std::string_view key, std::string_view value);
@@ -35,7 +45,7 @@ namespace ambry
 
 	private:
 		DB &m_db;
-		std::vector<Command> m_commands;
+		std::vector<Command> m_cmds;
 	};
 }
 

@@ -9,12 +9,13 @@
 
 #define INTER_ERR(msg) {ambry::ResultType::InterpretError, msg}
 #define KEY_NOT_FND {ambry::ResultType::InterpretError, "there is no database by that name"}
+#define TO_RES(v) Result{v.type, std::string(v.message)}
 
 namespace aci
 {
-	ambry::Result update_set_impl(Interpreter &inter, Cmd &cmd, uint8_t m)
+	Result update_set_impl(Ctx &ctx, uint8_t m)
 	{
-		auto iter = cmd.args.begin();
+		auto iter = ctx.cmd.args.begin();
 
 		const std::string &key = *iter;
 
@@ -22,68 +23,70 @@ namespace aci
 
 		iter++;
 
-		for (; iter != cmd.args.end(); iter++)
+		for (; iter != ctx.cmd.args.end(); iter++)
 		{
 			args += std::move(*iter);
 		}
 
-		return m ? inter.wdb->set(key, args) : inter.wdb->update(key, args);
+		auto res = m ? ctx.inter.wdb->set(key, args) : ctx.inter.wdb->update(key, args);
+
+		return TO_RES(res);
 	}
 
-	ambry::Result open_cb(Interpreter &inter, Cmd &cmd)
+	Result open_cb(Ctx &ctx)
 	{
-		const std::string &name = cmd.args.front();
+		const std::string &name = ctx.cmd.args.front();
 
-		auto [iter, emplaced] = inter.dbt.emplace(name, ambry::DB(name));
+		auto [iter, emplaced] = ctx.inter.dbt.emplace(name, ambry::DB(name));
 		
 		if (!emplaced)
 		{
 			return INTER_ERR("a database with that name already exists");
 		}
 
-		inter.wdb = &iter->second;
+		ctx.inter.wdb = &iter->second;
 
-		return inter.wdb->open();
+		return TO_RES(ctx.inter.wdb->open());
 	}
 
-	ambry::Result close_cb(Interpreter &inter, Cmd &cmd)
+	Result close_cb(Ctx &ctx)
 	{
-		auto iter = inter.dbt.find(cmd.args.front());
+		auto iter = ctx.inter.dbt.find(ctx.cmd.args.front());
 
-		if (iter == inter.dbt.end())
+		if (iter == ctx.inter.dbt.end())
 		{
 			return KEY_NOT_FND;
 		}
 
 		iter->second.close();
 
-		if (&iter->second == inter.wdb)
+		if (&iter->second == ctx.inter.wdb)
 		{
-			inter.wdb = nullptr;
+			ctx.inter.wdb = nullptr;
 		}
 
-		inter.dbt.erase(iter);
+		ctx.inter.dbt.erase(iter);
 
 		return {};
 	}
 
-	ambry::Result switch_cb(Interpreter &inter, Cmd &cmd)
+	Result switch_cb(Ctx &ctx)
 	{
-		auto iter = inter.dbt.find(cmd.args.front());
+		auto iter = ctx.inter.dbt.find(ctx.cmd.args.front());
 
-		if (iter == inter.dbt.end())
+		if (iter == ctx.inter.dbt.end())
 		{
 			return KEY_NOT_FND;
 		}
 
-		inter.wdb = &iter->second;
+		ctx.inter.wdb = &iter->second;
 
 		return {};
 	}
 
-	ambry::Result cache_mode_cb(Interpreter &inter, Cmd &cmd)
+	Result cache_mode_cb(Ctx &ctx)
 	{
-		const std::string &s = cmd.args.front();
+		const std::string &s = ctx.cmd.args.front();
 
 		bool on;
 
@@ -100,99 +103,101 @@ namespace aci
 			return INTER_ERR("exepcted on or off");
 		}
 
-		inter.wdb->switch_cache(on);
+		ctx.inter.wdb->switch_cache(on);
 
 		return {};
 	}
 
-	ambry::Result set_cb(Interpreter &inter, Cmd &cmd)
+	Result set_cb(Ctx &ctx)
 	{
-		return update_set_impl(inter, cmd, 1);
+		return update_set_impl(ctx, 1);
 	}
 
-	ambry::Result get_cb(Interpreter &inter, Cmd &cmd)
+	Result get_cb(Ctx &ctx)
 	{
-		const std::string &key = cmd.args.front();
+		const std::string &key = ctx.cmd.args.front();
 
-		if (inter.wdb->is_cached())
+		if (ctx.inter.wdb->is_cached())
 		{
-			auto opt = inter.wdb->get_cached(key);
+			auto opt = ctx.inter.wdb->get_cached(key);
 
 			if (!opt)
 			{
 				return {ambry::ResultType::KeyNotFound, "key not found"};
 			}
 
-			return {ambry::ResultType::Ok, opt.value()};
+			return {ambry::ResultType::Ok, std::string{ opt.value() }};
 		}
 		else
 		{
-			auto opt = inter.wdb->get(key);
+			auto opt = ctx.inter.wdb->get(key);
 
 			if (!opt)
 			{
 				return {ambry::ResultType::KeyNotFound, "key not found"};
 			}
 
-			auto [s, _] = inter.cache.emplace(opt.value());
+			auto [s, _] = ctx.inter.cache.emplace(opt.value());
 
 			return {ambry::ResultType::Ok, *s};
 		}
 	}
 
-	ambry::Result close_all_cb(Interpreter &inter, Cmd &cmd)
+	Result close_all_cb(Ctx &ctx)
 	{
-		for (auto &[_, db] : inter.dbt) 
+		for (auto &[_, db] : ctx.inter.dbt) 
 		{
 			db.close();
 		}
 
-		inter.wdb = nullptr;
-		inter.dbt.clear();
+		ctx.inter.wdb = nullptr;
+		ctx.inter.dbt.clear();
 
 		return {};
 	}
 
-	ambry::Result destroy_cb(Interpreter &inter, Cmd &cmd)
+	Result destroy_cb(Ctx &ctx)
 	{
-		auto iter = inter.dbt.find(cmd.args.front());
+		auto iter = ctx.inter.dbt.find(ctx.cmd.args.front());
 
-		if (iter == inter.dbt.end())
+		if (iter == ctx.inter.dbt.end())
 		{
 			return KEY_NOT_FND;
 		}
 
-		if (&iter->second == inter.wdb)
+		if (&iter->second == ctx.inter.wdb)
 		{
-			inter.wdb = nullptr;
+			ctx.inter.wdb = nullptr;
 		}
 
-		return iter->second.destroy();
+		return TO_RES(iter->second.destroy());
 	}
 
-	ambry::Result destroy_all_cb(Interpreter &inter, Cmd &cmd)
+	Result destroy_all_cb(Ctx &ctx)
 	{
 
-		for (auto &[_, db] : inter.dbt)
+		for (auto &[_, db] : ctx.inter.dbt)
 		{
 			ambry::Result result = db.destroy();
 
 			if (!result.ok())
 			{
-				return result;
+				return TO_RES(result);
 			}
 		}
 
-		inter.dbt.clear();
+		ctx.inter.dbt.clear();
 
-		inter.wdb = nullptr;
+		ctx.inter.wdb = nullptr;
 
 		return {};
 	}
 
-	ambry::Result cmds_cb(Interpreter &inter, Cmd &cmd)
+	Result cmds_cb(Ctx &ctx)
 	{
-		for (auto [cmd, ch] : inter.ct)
+		std::string output;
+
+		for (auto [cmd, ch] : ctx.inter.ct)
 		{
 			std::string arg_count;
 
@@ -205,36 +210,36 @@ namespace aci
 				arg_count = std::to_string(ch.arity);
 			}
 
-			fmt::println("- {}({}):\n\tDescription: {}\n\tUsage: {}{}",
-
-			cmd, arg_count, ch.description, cmd, ch.usage);
+			output += fmt::format("- {}({}):\n\tDescription: {}\n\tUsage: {}{}",
+					  cmd, arg_count, ch.description, cmd, ch.usage);
 		}
 
-		return {};
+		return {{}, output};
 	}
 
-	ambry::Result update_cb(Interpreter &inter, Cmd &cmd)
+	Result update_cb(Ctx &ctx)
 	{
-		return update_set_impl(inter, cmd, 0);
+		return update_set_impl(ctx, 0);
 	}
 
-	ambry::Result erase_cb(Interpreter &inter, Cmd &cmd)
+	Result erase_cb(Ctx &ctx)
 	{
-		return inter.wdb->erase(cmd.args.front());
+		return TO_RES(ctx.inter.wdb->erase(ctx.cmd.args.front()));
 	}
 
-	ambry::Result list_open_cb(Interpreter &inter, Cmd &cmd)
+	Result list_open_cb(Ctx &ctx)
 	{
 		fmt::println("name - size");
+		std::string output;
 
-		for (auto &[_, db] : inter.dbt)
+		for (auto &[_, db] : ctx.inter.dbt)
 		{
-			fmt::println("{} - {}", db.name(), db.size());
+			output += fmt::format("{} - {}", db.name(), db.size());
 		}
 
-		return {};
+		return {{}, output};
 	}
-
+	
 	void Interpreter::init_commands()
 	{
 		ct["open"] = 
@@ -347,7 +352,7 @@ namespace aci
 		};
 	}
 
-	ambry::Result Interpreter::interpret(Cmd &cmd)
+	Result Interpreter::interpret(Cmd &cmd)
 	{
 		auto iter = ct.find(cmd.cmd);
 
@@ -368,7 +373,13 @@ namespace aci
 			return INTER_ERR("expected an open database but none found");
 		}
 
-		return ch.fn(*this, cmd);
+		Ctx ctx
+		{
+			*this,
+			cmd
+		};
+
+		return ch.fn(ctx);
 	}
 
 	struct ParserCtx
@@ -388,7 +399,7 @@ namespace aci
 		inline bool is_unimportant() const
 		{
 			char c = str[pos];
-			return c == ' ' || c == '\n' || c == '\r';
+			return c == ' ' || c == '\t' || c == '\r' || c == '\n';
 		}
 
 		template<class FN>
@@ -457,9 +468,9 @@ namespace aci
 	{
 		bool at_end = ctx.advance_if([&]{ return ctx.is_unimportant(); });
 
-		if (at_end)
+		if (at_end || ctx.peek() == '\n')
 		{
-			return std::string{};
+			return std::nullopt;
 		}
 
 		if (ctx.peek() == '"')
@@ -474,38 +485,40 @@ namespace aci
 		return std::string{ ctx.str.substr(start, ctx.pos-start) };
 	}
 
-	std::optional<Cmd> parse(std::string_view source)
+	std::vector<Cmd> parse(std::string_view source)
 	{
-		if (source.empty())
-		{
-			return std::nullopt;
-		}
-
-		Cmd cmd;
+		std::vector<Cmd> output;
 
 		ParserCtx ctx(source);
 
-		auto opt = parse_arg(ctx);
-
-		if (!opt)
-		{
-			return std::nullopt;
-		}
-
-		cmd.cmd = std::move(opt.value());
-
 		while (!ctx.at_end())
 		{
-			auto arg = parse_arg(ctx);
+			Cmd cmd;
 
-			if (!arg)
+			auto opt = parse_arg(ctx);
+
+			if (!opt)
 			{
-				return std::nullopt;
+				return {};
 			}
 
-			cmd.args.push_back(std::move(arg.value()));
+			cmd.cmd = std::move(opt.value());
+
+			while (!ctx.at_end() && ctx.peek() != '\n')
+			{
+				auto arg = parse_arg(ctx);
+
+				if (!arg)
+				{
+					break;
+				}
+
+				cmd.args.push_back(std::move(arg.value()));
+			}
+
+			output.push_back(std::move(cmd));
 		}
 
-		return cmd;
+		return output;
 	}
 }

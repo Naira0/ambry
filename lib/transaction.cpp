@@ -5,19 +5,19 @@ namespace ambry
 {
 	Transaction& Transaction::set(std::string_view key, std::string_view value)
 	{
-		m_commands.emplace_back(Command{CommandType::Set, key, value});
+		m_cmds.emplace_back(Command{CmdType::Set, key, value});
 		return *this;
 	}
 
 	Transaction& Transaction::update(const std::string &key, std::string_view value)
 	{
-		m_commands.emplace_back(Command{CommandType::Update, key, value});
+		m_cmds.emplace_back(Command{CmdType::Update, key, value});
 		return *this;
 	}
 
 	Transaction& Transaction::erase(const std::string &key)
 	{
-		m_commands.emplace_back(Command{CommandType::Erase, key, ""});
+		m_cmds.emplace_back(Command{CmdType::Erase, key, ""});
 		return *this;
 	}
 
@@ -30,21 +30,21 @@ namespace ambry
 		
 		Result result;
 
-		for (auto command : m_commands)
+		for (auto command : m_cmds)
 		{
 			switch (command.type)
 			{
-				case CommandType::Set:
+				case CmdType::Set:
 				{
 					HANDLE(m_db.set(command.a1, command.a2));
 					break;
 				}
-				case CommandType::Update:
+				case CmdType::Update:
 				{
 					HANDLE(m_db.update(std::string{command.a1}, command.a2));
 					break;
 				}
-				case CommandType::Erase:
+				case CmdType::Erase:
 				{
 					HANDLE(m_db.erase(std::string{command.a1}));
 					break;

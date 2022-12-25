@@ -10,38 +10,38 @@ namespace ambry
 {
     Result DB::open()
     {
-        return m_io_manager.load_structures();
+        return m_im.load_structures();
     }
 
     void DB::close()
     {
-        m_io_manager.cleanup();
+        m_im.cleanup();
 
-        m_context.data.clear();
-        m_context.data.shrink_to_fit();
+        m_ctx.data.clear();
+        m_ctx.data.shrink_to_fit();
 
-		m_context.index.clear();
-		m_context.free_list.clear();
+		m_ctx.index.clear();
+		m_ctx.free_list.clear();
     }
 
     Result DB::destroy()
     {
-        return m_io_manager.destroy();
+        return m_im.destroy();
     }
 
     std::optional<std::string_view>
     DB::get_cached(const std::string &key)
     {
-        assert(m_context.options.enable_cache && "caching must be turned on to use this function");
+        assert(m_ctx.options.enable_cache && "caching must be turned on to use this function");
 
-        auto iter = m_context.index.find(key);
+        auto iter = m_ctx.index.find(key);
 
-        if (iter == m_context.index.end())
+        if (iter == m_ctx.index.end())
             return {};
 
         IndexData data = iter->second;
 
-        auto cache = m_context.data.data() + data.offset;
+        auto cache = m_ctx.data.data() + data.offset;
 
         return std::string_view{(char*)cache, data.length};
     }
@@ -49,19 +49,19 @@ namespace ambry
     std::optional<std::string>
     DB::get(const std::string &key)
     {
-        auto iter = m_context.index.find(key);
+        auto iter = m_ctx.index.find(key);
 
-        if (iter == m_context.index.end())
+        if (iter == m_ctx.index.end())
             return {};
 
         IndexData data = iter->second;
         
-        return m_io_manager.read_dat(data.offset, data.length);
+        return m_im.read_dat(data.offset, data.length);
     }
 
     Result DB::set(std::string_view key, std::string_view value)
     {
-        auto [pair, emplaced] = m_context.index.emplace(key, IndexData{});
+        auto [pair, emplaced] = m_ctx.index.emplace(key, IndexData{});
 
         if (!emplaced)
             return {ResultType::KeyNotInserted, "Could not insert key into index"};
@@ -73,34 +73,34 @@ namespace ambry
         data.offset = offset;
         data.length = value.size();
 
-        m_io_manager.insert(*pair);
+        m_im.insert(*pair);
 
         return {};
     }
 
     Result DB::erase(const std::string &key)
     {
-        auto iter = m_context.index.find(key);
+        auto iter = m_ctx.index.find(key);
 
-        if (iter == m_context.index.end())
+        if (iter == m_ctx.index.end())
             return {ResultType::KeyNotFound, "key does not exist in index"};
         
         IndexData data = iter->second;
 
-        m_context.index.erase(iter);
+        m_ctx.index.erase(iter);
 
         m_rw.free(data.offset, data.length);
 
-        m_io_manager.erase(*iter);
+        m_im.erase(*iter);
 
         return {};
     }
 
     Result DB::update(const std::string &key, std::string_view value)
     {
-        auto iter = m_context.index.find(key);
+        auto iter = m_ctx.index.find(key);
 
-        if (iter == m_context.index.end())
+        if (iter == m_ctx.index.end())
             return {ResultType::KeyNotFound, "key does not exist in index"};
 
         IndexData &data = iter->second;
@@ -108,7 +108,7 @@ namespace ambry
         data.offset = m_rw.update(data.offset, data.length, value);
         data.length = value.size();
 
-        m_io_manager.update(*iter);
+        m_im.update(*iter);
 
         return {};
     }
@@ -120,17 +120,17 @@ namespace ambry
 
     DB::Iterator DB::begin()
     {
-        return Iterator(m_context.index.begin(), *this);
+        return Iterator(m_ctx.index.begin(), *this);
     }
 
     DB::Iterator DB::end()
     {
-        return Iterator(m_context.index.end(), *this);
+        return Iterator(m_ctx.index.end(), *this);
     }
 
     size_t DB::size() const
     {
-        return m_context.index.size();
+        return m_ctx.index.size();
     }
 
     std::string_view DB::operator[](const std::string &key)
@@ -145,35 +145,35 @@ namespace ambry
 
     bool DB::contains(const std::string &key) const
     {
-        return m_context.index.contains(key);
+        return m_ctx.index.contains(key);
     }
 
     void DB::reserve(size_t size)
     {
-        m_context.data.reserve(size);
+        m_ctx.data.reserve(size);
     }
 
     void DB::switch_cache(bool on)
     {
         if (on)
         {
-            m_context.options.enable_cache = true;
-            m_io_manager.load_dat();
+            m_ctx.options.enable_cache = true;
+            m_im.load_dat();
         }
         else
         {
-            m_context.data.clear();
-            m_context.data.shrink_to_fit();
+            m_ctx.data.clear();
+            m_ctx.data.shrink_to_fit();
         }
     }
 
     std::string_view DB::name() const
     {
-        return m_context.name;
+        return m_ctx.name;
     }
 
     bool DB::is_cached() const
     {
-        return m_context.options.enable_cache;
+        return m_ctx.options.enable_cache;
     }
 }
