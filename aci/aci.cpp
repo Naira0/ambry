@@ -282,18 +282,14 @@ namespace aci
 
 		std::string &name = *iter++;
 
-		if (name.size() > 256 )
+		if (name.size() > 256)
 		{
 			return INTER_ERR("role length must be less then 256 chars");
 		}
 
-		std::string buff;
+		FlagT f;
 
-		constexpr size_t size = sizeof(FlagT);
-
-		buff.resize(ctx.cmd.args.size() * size);
-
-		for (size_t off = 0; iter != ctx.cmd.args.end(); iter++)
+		for (; iter != ctx.cmd.args.end(); iter++)
 		{
 			auto flag = perm_table.find(*iter);
 
@@ -302,12 +298,16 @@ namespace aci
 				return INTER_ERR("invalid flag name provided");
 			}
 
-			memcpy(buff.data()+off, (char*)&flag->second, size);
-
-			off += size;
+			f |= flag->second;
 		}
 
-		auto res = ctx.inter.users.set(name, buff);
+		std::string buff;
+
+		buff.resize(sizeof(FlagT));
+
+		memcpy(buff.data(), (char*)&f, sizeof(FlagT));
+
+		auto res = ctx.inter.roles.set(name, buff);
 
 		return TO_RES(res);
 	}
@@ -315,7 +315,7 @@ namespace aci
 	std::string_view get_field(const std::string &str, size_t off)
 	{
 		uint8_t len = str[off];
-		return { str.begin()+off, str.begin()+len };
+		return { str.begin()+off+1, str.begin()+len+1 };
 	}
 
 	Result login_cb(Ctx &ctx)
@@ -361,7 +361,7 @@ namespace aci
 
 		for (; iter != ctx.cmd.args.end(); iter++)
 		{
-			if (ctx.inter.roles.contains(*iter))
+			if (!ctx.inter.roles.contains(*iter))
 			{
 				return INTER_ERR("invalid role name provided");
 			}
@@ -445,7 +445,7 @@ namespace aci
 
 		if (!result.ok())
 		{
-			return INTER_ERR("the provided user does not exist");
+			return INTER_ERR("the provided rolename does not exist");
 		}
 
 		return {};
@@ -493,7 +493,6 @@ namespace aci
 			.description = "returns a list of active users",
 			.fn = active_users_cb,
 			.expect_wdb = false,
-			.perms = ADMIN,
 		};
 
 		ct["show_roles"] = 
@@ -501,12 +500,11 @@ namespace aci
 			.description = "returns a list of roles",
 			.fn = show_roles_cb,
 			.expect_wdb = false,
-			.perms = ADMIN,
 		};
 
-		ct["create_role"] = 
+		ct["delete_role"] = 
 		{
-			.arity = 2,
+			.arity = 1,
 			.description = "deletes a role by its name",
 			.usage = " <role name>",
 			.fn = delete_role_cb,
@@ -607,6 +605,7 @@ namespace aci
 			.description = "sets a value to the working database. any additional values will be concatenated together",
 			.usage = " <key> <value> <...>",
 			.fn = set_cb,
+			.perms = SET,
 		};
 
 		ct["update"] = 
@@ -623,6 +622,7 @@ namespace aci
 			.description = "gets a value from the workind database from the given key",
 			.usage = " <key>",
 			.fn = get_cb,
+			.perms = VIEW,
 		};
 
 		ct["erase"] = 

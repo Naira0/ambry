@@ -23,6 +23,8 @@ namespace aci
 
 	FLAG SET = 1 << 0;
 	FLAG GET = 1 << 1;
+	FLAG CRUD = 1 << 2;
+	FLAG VIEW = 1 << 3;
 
 	FLAG ADMIN = std::numeric_limits<FlagT>::max();
 
@@ -32,6 +34,8 @@ namespace aci
 	{
 		SET(SET)
 		SET(GET)
+		SET(CRUD)
+		SET(VIEW)
 	};
 
 	#undef SET
