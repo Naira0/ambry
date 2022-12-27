@@ -43,7 +43,7 @@ public:
 
 	void close();
 
-	std::vector<Incoming> recv_from_all(int timeout = -1);
+	std::vector<Incoming> recv_from_all(aci::Interpreter &inter, int timeout = -1);
 	
 	void command_loop(aci::Interpreter &inter);
 
@@ -56,6 +56,8 @@ private:
 	SockOpt m_opt;
 	ConInfo m_ci;
 	Logger m_lgr;
+
+	std::set<int> m_cons;
 
 	std::thread m_listener;
 

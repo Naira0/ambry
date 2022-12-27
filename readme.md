@@ -1,66 +1,13 @@
 # Ambry
-Ambry is a key value database.
+ambry is a fast key value store.
 
-## Usage
-```cpp
-using namespace ambry;
-
-int main()
-{
-	DB db("my_db");
-
-	Result result = db.open();
-
-	if (!result.ok())
-	{
-		// handle error
-	}
-
-	db.set("hello", "world");
-	db.set("ambry", "ambry is a database");
-	db.set("erase", "me!");
-
-	db.erase("erase");
-
-	db.update("ambry", "sucks");
-
-	for (auto [key, value] : db)
-	{
-		std::cout << key << ": " << value << '\n';
-	}
-} 
-```
-
-## Caching
-caching can be enabled to greatly improve read speeds, however, it will increase write speeds.
-
-```cpp
-	DB db("my_db",  {
-		.enable_cache = true,
-	});
-
-	Result result = db.open();
-
-	if (!result.ok())
-	{
-		// handle error
-	}
-
-	db.set("hello", "world");
-	
-	// to get data from cache use get_cached instead of get instead
-	std::cout << db.get_cached("hello").value() << '\n';
-```
-
-## Transactions
-transactions just store a buffered seqeunce of commands to execute at a later time.
-
-```cpp
-	Transaction tr = db.begin_transaction();
-
-	// will return the first error encountered when commiting
-	Result result = tr
-	.set("hello", "transactions!")
-	.set("this", "can be chained!")
-	.commit();
-```
+## Modules
+### this project is composed of several modules
+#### Library
+The base of ambry is a C++ library for directly working on db files.
+#### Command Interpreter
+a command interpreter for ambry commands with a full permission and user system.
+#### Server
+a network interface for ambry that allows you to manage users and their permissions through commands.
+#### Cli Client
+a cli client that allows you to work on serverless db files or connect to an ambry server.

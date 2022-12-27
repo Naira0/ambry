@@ -80,12 +80,14 @@ void Server::listen()
 					LOG_ERRNO(warn);
 					continue;
 				}
+
+				m_cons.emplace(cfd);
 			}
 		}
 	};
 }
 
-std::vector<Incoming> Server::recv_from_all(int timeout)
+std::vector<Incoming> Server::recv_from_all(aci::Interpreter &inter, int timeout)
 {
 	std::vector<epoll_event> events;
 
@@ -113,6 +115,8 @@ std::vector<Incoming> Server::recv_from_all(int timeout)
 
 		if (events[i].events & EPOLLRDHUP)
 		{
+			m_cons.erase(fd);
+			inter.logins.erase(fd);
 			epoll_ctl(m_epoll_fd, EPOLL_CTL_DEL, fd, nullptr);
 			continue;
 		}
@@ -179,7 +183,7 @@ void Server::command_loop(aci::Interpreter &inter)
 {
 	while (true)
 	{
-		auto messages = recv_from_all(-1);
+		auto messages = recv_from_all(inter, -1);
 
 		for (auto &[m, fd] : messages)
 		{	
@@ -194,7 +198,9 @@ void Server::command_loop(aci::Interpreter &inter)
 
 			for (auto &c : cmd)
 			{
-				aci::Result result = inter.interpret(c);
+				aci::Result result = inter.interpret(c, fd);
+
+				//LOG(info, "'{}' executed by {}", c.cmd, )
 
 				send(construct_responce(result), fd);
 			}

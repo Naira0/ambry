@@ -18,7 +18,7 @@ include_directories(../shared)
 # target_link_libraries(ambry-server PUBLIC ambry_lib)
 # target_include_directories(ambry-server PUBLIC ../lib)
 
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../command_interpreter ${CMAKE_CURRENT_BINARY_DIR}/command_interpreter)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../aci ${CMAKE_CURRENT_BINARY_DIR}/aci)
 
 target_link_libraries(ambry-server PUBLIC command-interpreter)
-target_include_directories(ambry-server PUBLIC ../command_interpreter)
+target_include_directories(ambry-server PUBLIC ../aci)

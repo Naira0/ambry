@@ -1,8 +1,9 @@
 #pragma once
 
-#include "types.hpp"
-#include "db.hpp"
+#include "../lib/types.hpp"
+#include "../lib/db.hpp"
 
+#include <limits>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -15,6 +16,26 @@
 
 namespace aci
 {
+	// the underlying type of the flag
+	using FlagT = uint32_t;
+
+	#define FLAG static constexpr FlagT
+
+	FLAG SET = 1 << 0;
+	FLAG GET = 1 << 1;
+
+	FLAG ADMIN = std::numeric_limits<FlagT>::max();
+
+	#define SET(f) { #f, f },
+
+	static std::unordered_map<std::string_view, FlagT> perm_table
+	{
+		SET(SET)
+		SET(GET)
+	};
+
+	#undef SET
+
 	struct Cmd
 	{
 		std::string cmd;
@@ -29,6 +50,7 @@ namespace aci
 	{
 		Interpreter &inter;
 		Cmd &cmd;
+		int fd;
 	};
 
 	typedef Result(*CmdFN)(Ctx&);
@@ -41,6 +63,7 @@ namespace aci
 		CmdFN fn;
 		// if true well expect their to be a wdb set
 		bool expect_wdb = true;
+		FlagT perms = 0;
 	};
 
 	using CmdTable = std::unordered_map<std::string_view, CmdHandle>;
@@ -53,19 +76,32 @@ namespace aci
 		DBTable &dbt;
 		// the working database
 		ambry::DB *wdb{};
-		// if caching is disabled the interpreter will store values in here
-		std::set<std::string> cache;
+
+		// the internal database used for storing user and role information
+		ambry::DB users;
+		ambry::DB roles;
 
 		// useful for quit commands
 		bool running = true;
 
+		std::unordered_map<int, std::string> logins;
+
 		Interpreter(DBTable &dbt) :
-			dbt(dbt)
-		{}
+			dbt(dbt),
+			users("__ACI_USERS__"),
+			roles("__ACI_ROLES__")
+		{
+			users.open();
+			roles.open();
+
+			roles.set("admin", std::string_view{(char*)&ADMIN, sizeof(FlagT)});
+		}
 
 		void init_commands();
 
-		Result interpret(Cmd &cmd);
+		Result interpret(Cmd &cmd, int from);
+
+		bool calculate_perms(int from, FlagT needed);
 	};
 
 	std::vector<Cmd> parse(std::string_view source);

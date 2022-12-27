@@ -13,8 +13,6 @@ aci::Result quit_cb(aci::Ctx &ctx)
 	return {};
 }
 
-// 0 0000 message
-
 int main()
 {
 	Server server({

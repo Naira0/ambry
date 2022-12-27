@@ -1,11 +1,12 @@
 #include "aci.hpp"
-#include "db.hpp"
-#include "types.hpp"
+#include "../lib/db.hpp"
+#include "../lib/types.hpp"
 #include <cstddef>
 #include <iostream>
 #include <optional>
+#include <cstring>
 
-#include "fmt.hpp"
+#include "../shared/fmt.hpp"
 
 #define INTER_ERR(msg) {ambry::ResultType::InterpretError, msg}
 #define KEY_NOT_FND {ambry::ResultType::InterpretError, "there is no database by that name"}
@@ -139,9 +140,7 @@ namespace aci
 				return {ambry::ResultType::KeyNotFound, "key not found"};
 			}
 
-			auto [s, _] = ctx.inter.cache.emplace(opt.value());
-
-			return {ambry::ResultType::Ok, *s};
+			return {ambry::ResultType::Ok, std::move(opt.value()) };
 		}
 	}
 
@@ -226,13 +225,15 @@ namespace aci
 
 	Result erase_cb(Ctx &ctx)
 	{
-		return TO_RES(ctx.inter.wdb->erase(ctx.cmd.args.front()));
+		auto res = ctx.inter.wdb->erase(ctx.cmd.args.front());
+		return TO_RES(res);
 	}
 
 	Result list_open_cb(Ctx &ctx)
 	{
-		fmt::println("name - size");
 		std::string output;
+
+		output += "name - size";
 
 		for (auto &[_, db] : ctx.inter.dbt)
 		{
@@ -241,9 +242,233 @@ namespace aci
 
 		return {{}, output};
 	}
+
+	Result create_user_cb(Ctx &ctx)
+	{
+		auto iter = ctx.cmd.args.begin();
+
+		std::string &username = *iter++;
+		std::string &password = *iter++;
+
+		std::string buff;
+
+		if (password.size() > 255)
+		{
+			return INTER_ERR("password length must be less then 256 chars");
+		}
+
+		buff += (uint8_t)password.size();
+		buff += password;
+
+		for (; iter != ctx.cmd.args.end(); iter++)
+		{
+			if (iter->size() > 255)
+			{
+				return INTER_ERR("role length must be less then 256 chars");
+			}
+
+			buff += (uint8_t)iter->size();
+			buff += *iter;
+		}
+
+		auto res = ctx.inter.users.set(username, buff);
+
+		return TO_RES(res);
+	}
+
+	Result create_role_cb(Ctx &ctx)
+	{
+		auto iter = ctx.cmd.args.begin();
+
+		std::string &name = *iter++;
+
+		if (name.size() > 256 )
+		{
+			return INTER_ERR("role length must be less then 256 chars");
+		}
+
+		std::string buff;
+
+		constexpr size_t size = sizeof(FlagT);
+
+		buff.resize(ctx.cmd.args.size() * size);
+
+		for (size_t off = 0; iter != ctx.cmd.args.end(); iter++)
+		{
+			auto flag = perm_table.find(*iter);
+
+			if (flag == perm_table.end())
+			{
+				return INTER_ERR("invalid flag name provided");
+			}
+
+			memcpy(buff.data()+off, (char*)&flag->second, size);
+
+			off += size;
+		}
+
+		auto res = ctx.inter.users.set(name, buff);
+
+		return TO_RES(res);
+	}
+
+	std::string_view get_field(const std::string &str, size_t off)
+	{
+		uint8_t len = str[off];
+		return { str.begin()+off, str.begin()+len };
+	}
+
+	Result login_cb(Ctx &ctx)
+	{
+		std::string &username = ctx.cmd.args[0];
+		std::string &password = ctx.cmd.args[1];
+
+		auto opt = ctx.inter.users.get(username);
+
+		if (!opt)
+		{
+			return INTER_ERR("invalid username provided");
+		}
+
+		std::string &data = opt.value();
+
+		std::string_view userpass = get_field(data, 0);
+
+		if (password != userpass)
+		{
+			return INTER_ERR("password does not match");
+		}
+
+		ctx.inter.logins.emplace(ctx.fd, std::move(username));
+
+		return {};
+	}
+
+	Result add_roles_cb(Ctx &ctx)
+	{
+		auto iter = ctx.cmd.args.begin();
+
+		std::string &username = *iter++;
+
+		auto opt = ctx.inter.users.get(username);
+
+		if (!opt)
+		{
+			return INTER_ERR("invalid username provided");
+		}
+
+		std::string &data = opt.value();
+
+		for (; iter != ctx.cmd.args.end(); iter++)
+		{
+			if (ctx.inter.roles.contains(*iter))
+			{
+				return INTER_ERR("invalid role name provided");
+			}
+
+			data += (uint8_t)iter->size();
+			data += *iter;
+		}
+
+		auto res = ctx.inter.users.update(username, data);
+
+		return TO_RES(res);
+	}
+
+	Result remove_roles_cb(Ctx &ctx)
+	{
+		auto iter = ctx.cmd.args.begin();
+
+		std::string &username = *iter++;
+
+		auto opt = ctx.inter.users.get(username);
+
+		if (!opt)
+		{
+			return INTER_ERR("invalid username provided");
+		}
+
+		std::string &data = opt.value();
+
+		std::string buff;
+
+		buff.reserve(data.size());
+
+		buff += data.substr(0, data[0]+1);
+
+		std::set<std::string_view> roles {iter, ctx.cmd.args.end()};
+
+		size_t offset = buff.size();
+
+		while (offset < data.size())
+		{
+			std::string_view role = get_field(data, offset);
+			offset += role.size()+1;
+
+			if (!roles.contains(role))
+			{
+				continue;
+			}
+
+			buff += (uint8_t)iter->size();
+			buff += *iter;
+
+			iter++;
+		}
+
+		auto res = ctx.inter.users.update(username, buff);
+
+		return TO_RES(res);
+	}
 	
 	void Interpreter::init_commands()
 	{
+		ct["create_user"] = 
+		{
+			.arity = 2,
+			.description = "creates a new user account",
+			.usage = " <user name> <password> [role] ...",
+			.fn = create_user_cb,
+			.expect_wdb = false,
+			.perms = ADMIN,
+		};
+
+		ct["create_role"] = 
+		{
+			.arity = 2,
+			.description = "creates a new role with permissions",
+			.usage = " <role name> <permission> ...",
+			.fn = create_role_cb,
+			.expect_wdb = false,
+		};
+
+		ct["login"] = 
+		{
+			.arity = 2,
+			.description = "login command",
+			.usage = " <username> <password>",
+			.fn = login_cb,
+			.expect_wdb = false,
+		};
+
+		ct["add_roles"] = 
+		{
+			.arity = 2,
+			.description = "adds any number of roles to a provided user",
+			.usage = " <username> <role> ...",
+			.fn = add_roles_cb,
+			.expect_wdb = false,
+		};
+
+		ct["remove_roles"] = 
+		{
+			.arity = 2,
+			.description = "removes any number of roles to a provided user",
+			.usage = " <username> <role> ...",
+			.fn = remove_roles_cb,
+			.expect_wdb = false,
+		};
+
 		ct["open"] = 
 		{
 			.arity = 1,
@@ -257,7 +482,7 @@ namespace aci
 		{
 			.arity = 1,
 			.description = "closes a database or the working database if only one db is open",
-			.usage = " [db_name]",
+			.usage = " <db_name>",
 			.fn = close_cb,
 			.expect_wdb = false,
 		};
@@ -266,7 +491,7 @@ namespace aci
 		{
 			.arity = 1,
 			.description = "switches the current database to one with the give arguments name",
-			.usage = " [db_name]",
+			.usage = " <db_name>",
 			.fn = switch_cb,
 			.expect_wdb = false,
 		};
@@ -354,7 +579,66 @@ namespace aci
 		};
 	}
 
-	Result Interpreter::interpret(Cmd &cmd)
+	bool Interpreter::calculate_perms(int from, FlagT needed)
+	{
+		if (needed == 0)
+		{
+			return true;
+		}
+
+		auto iter = logins.find(from);
+
+		if (iter == logins.end())
+		{
+			return false;
+		}
+
+		auto opt = users.get(iter->second);
+
+		if (!opt)
+		{
+			return false;
+		}
+
+		std::string &data = opt.value();
+
+		size_t offset = data[0]+1;
+
+		std::set<FlagT> looking;
+
+		while (offset < data.size())
+		{
+			std::string_view role_name = get_field(data, offset);
+			offset += role_name.size()+1;
+
+			auto opt = roles.get(std::string{role_name});
+
+			if (!opt)
+			{
+				return false;
+			}
+
+			FlagT flag;
+
+			memcpy(opt.value().data(), (char*)&flag, sizeof(FlagT));
+
+			for (auto [_, perm] : perm_table)
+			{
+				if ((needed & perm) && looking.contains(flag))
+				{
+					looking.erase(flag);
+				}
+				else if ((needed & perm) && !(flag & perm))
+				{
+					looking.emplace(perm);
+				}
+			}
+		}
+
+		return looking.empty();
+	}
+
+	Result Interpreter::interpret(Cmd &cmd, int from)
 	{
 		auto iter = ct.find(cmd.cmd);
 
@@ -378,8 +662,14 @@ namespace aci
 		Ctx ctx
 		{
 			*this,
-			cmd
+			cmd,
+			from,
 		};
+
+		if (!calculate_perms(from, ch.perms))
+		{
+			return INTER_ERR("you do not meet the permissions to execute this command");
+		}
 
 		return ch.fn(ctx);
 	}
