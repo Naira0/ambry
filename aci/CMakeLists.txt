@@ -8,7 +8,7 @@ add_library(command-interpreter
 	
 # add_executable(command-interpreter
 # 	main.cpp
-# 	aci.hpp aci.cpp)
+# 	aci.hpp aci.cpp) a
 
 include_directories(../shared)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../lib ${CMAKE_CURRENT_BINARY_DIR}/lib)
