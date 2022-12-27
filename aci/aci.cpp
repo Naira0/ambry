@@ -405,7 +405,7 @@ namespace aci
 			std::string_view role = get_field(data, offset);
 			offset += role.size()+1;
 
-			if (!roles.contains(role))
+			if (roles.contains(role))
 			{
 				continue;
 			}
@@ -420,6 +420,61 @@ namespace aci
 
 		return TO_RES(res);
 	}
+
+	Result logout_cb(Ctx &ctx)
+	{
+		ctx.inter.logins.erase(ctx.fd);
+		return {};
+	}
+
+	Result delete_user_cb(Ctx &ctx)
+	{
+		ambry::Result result = ctx.inter.users.erase(ctx.cmd.args.front());
+
+		if (!result.ok())
+		{
+			return INTER_ERR("the provided user does not exist");
+		}
+
+		return {};
+	}
+
+	Result delete_role_cb(Ctx &ctx)
+	{
+		ambry::Result result = ctx.inter.roles.erase(ctx.cmd.args.front());
+
+		if (!result.ok())
+		{
+			return INTER_ERR("the provided user does not exist");
+		}
+
+		return {};
+	}
+
+	Result active_users_cb(Ctx &ctx)
+	{
+		std::string output;
+
+		for (auto &[_, username] : ctx.inter.logins)
+		{
+			output += username + '\n';
+		}
+
+		return {{}, output};
+	}
+
+	Result show_roles_cb(Ctx &ctx)
+	{
+		std::string output;
+
+		for (const auto &[rolename, _] : ctx.inter.roles)
+		{
+			output += rolename;
+			output += '\n';
+		}
+
+		return {{}, output};
+	}
 	
 	void Interpreter::init_commands()
 	{
@@ -430,16 +485,51 @@ namespace aci
 			.usage = " <user name> <password> [role] ...",
 			.fn = create_user_cb,
 			.expect_wdb = false,
+			//.perms = ADMIN,
+		};
+
+		ct["active_users"] = 
+		{
+			.description = "returns a list of active users",
+			.fn = active_users_cb,
+			.expect_wdb = false,
+			.perms = ADMIN,
+		};
+
+		ct["show_roles"] = 
+		{
+			.description = "returns a list of roles",
+			.fn = show_roles_cb,
+			.expect_wdb = false,
 			.perms = ADMIN,
 		};
 
 		ct["create_role"] = 
 		{
 			.arity = 2,
+			.description = "deletes a role by its name",
+			.usage = " <role name>",
+			.fn = delete_role_cb,
+			.expect_wdb = false,
+		};
+
+		ct["create_role"] = 
+		{
+			.arity = 1,
 			.description = "creates a new role with permissions",
 			.usage = " <role name> <permission> ...",
 			.fn = create_role_cb,
 			.expect_wdb = false,
+		};
+
+		ct["delete_user"] = 
+		{
+			.arity = 1,
+			.description = "deletes a user",
+			.usage = " <user name>",
+			.fn = delete_user_cb,
+			.expect_wdb = false,
+			.perms = ADMIN,
 		};
 
 		ct["login"] = 
@@ -448,6 +538,13 @@ namespace aci
 			.description = "login command",
 			.usage = " <username> <password>",
 			.fn = login_cb,
+			.expect_wdb = false,
+		};
+
+		ct["logout"] = 
+		{
+			.description = "logs out the command sender or does nothing if the command sender is not logged in",
+			.fn = logout_cb,
 			.expect_wdb = false,
 		};
 
