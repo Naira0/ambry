@@ -11,32 +11,32 @@
 #include <unordered_map>
 #include <variant>
 #include <set>
+#include <bitset>
 
 // ambry command interpreter 
 
 namespace aci
 {
 	// the underlying type of the flag
-	using FlagT = uint32_t;
-
-	#define FLAG static constexpr FlagT
-
-	FLAG SET = 1 << 0;
-	FLAG GET = 1 << 1;
-	FLAG CRUD = 1 << 2;
-	FLAG VIEW = 1 << 3;
-
-	FLAG ADMIN = std::numeric_limits<FlagT>::max();
+	using FlagT = std::bitset<32>;
+	
+	enum FLAG 
+	{
+		SET,
+		GET, 
+		VIEW,
+	};
 
 	#define SET(f) { #f, f },
 
-	static std::unordered_map<std::string_view, FlagT> perm_table
+	static std::unordered_map<std::string_view, FLAG> perm_table
 	{
 		SET(SET)
 		SET(GET)
-		SET(CRUD)
 		SET(VIEW)
 	};
+
+	static auto ADMIN = FlagT().set();
 
 	#undef SET
 
@@ -73,6 +73,16 @@ namespace aci
 	using CmdTable = std::unordered_map<std::string_view, CmdHandle>;
 	using DBTable  = std::unordered_map<std::string, ambry::DB>;
 
+	template<class ...A>
+	FlagT set_perms(A ...a)
+	{
+		FlagT output;
+
+		((output.set(a)), ...);
+
+		return output;
+	}
+
 	struct Interpreter
 	{
 		CmdTable ct;
@@ -92,13 +102,15 @@ namespace aci
 
 		Interpreter(DBTable &dbt) :
 			dbt(dbt),
-			users("__ACI_USERS__"),
-			roles("__ACI_ROLES__")
+			users("__ACI_USERS__", {.enable_cache = true}),
+			roles("__ACI_ROLES__", {.enable_cache = true})
 		{
 			users.open();
 			roles.open();
 
-			roles.set("admin", std::string_view{(char*)&ADMIN, sizeof(FlagT)});
+			auto admin_int = ADMIN.to_ullong();
+
+			roles.set("admin", {(char*)&admin_int, sizeof(admin_int)});
 		}
 
 		void init_commands();

@@ -2,6 +2,7 @@
 #include "../lib/db.hpp"
 #include "../lib/types.hpp"
 #include <cstddef>
+#include <initializer_list>
 #include <iostream>
 #include <optional>
 #include <cstring>
@@ -298,16 +299,12 @@ namespace aci
 				return INTER_ERR("invalid flag name provided");
 			}
 
-			f |= flag->second;
+			f.set(flag->second);
 		}
 
-		std::string buff;
+		auto ulong = f.to_ulong();
 
-		buff.resize(sizeof(FlagT));
-
-		memcpy(buff.data(), (char*)&f, sizeof(FlagT));
-
-		auto res = ctx.inter.roles.set(name, buff);
+		auto res = ctx.inter.roles.set(name, {(char*)&ulong, sizeof(ulong)});
 
 		return TO_RES(res);
 	}
@@ -315,7 +312,7 @@ namespace aci
 	std::string_view get_field(const std::string &str, size_t off)
 	{
 		uint8_t len = str[off];
-		return { str.begin()+off+1, str.begin()+len+1 };
+		return { str.data()+off+1, len };
 	}
 
 	Result login_cb(Ctx &ctx)
@@ -333,6 +330,8 @@ namespace aci
 		std::string &data = opt.value();
 
 		std::string_view userpass = get_field(data, 0);
+
+		fmt::println("pass {}", userpass);
 
 		if (password != userpass)
 		{
@@ -463,19 +462,78 @@ namespace aci
 		return {{}, output};
 	}
 
+	std::string perm_string(std::string_view flag_raw)
+	{
+		std::string output;
+
+		unsigned long ulong;
+
+		memcpy((char*)&ulong, flag_raw.data(), sizeof(ulong));
+
+		FlagT flag = ulong;
+
+		for (auto [name, value] : perm_table)
+		{
+			if (flag.test(value))
+			{
+				output += name;
+				output += ' ';
+			}
+		}
+
+		return output;
+	}
+
 	Result show_roles_cb(Ctx &ctx)
 	{
 		std::string output;
 
-		for (const auto &[rolename, _] : ctx.inter.roles)
+		for (const auto &[role, value] : ctx.inter.roles)
 		{
-			output += rolename;
+			output += role;
+			output += ' ' + perm_string(value);
 			output += '\n';
 		}
 
 		return {{}, output};
 	}
-	
+
+	Result user_roles_cb(Ctx &ctx)
+	{
+		std::string output;
+
+		auto opt = ctx.inter.users.get(ctx.cmd.args.front());
+
+		if (!opt)
+		{
+			return INTER_ERR("invalid username provided");
+		}
+
+		std::string &data = opt.value();
+
+		size_t offset = data[0]+1;
+
+		while (offset > data.size())
+		{
+			std::string role_name { get_field(data, offset) };
+			offset += role_name.size()+1;
+
+			auto opt = ctx.inter.roles.get(role_name);
+
+			// probably deleted
+			if (!opt)
+			{
+				continue;
+			}
+
+			output += perm_string(opt.value());
+		}
+
+		fmt::println("yes");
+
+		return {{}, output};
+	}
+
 	void Interpreter::init_commands()
 	{
 		ct["create_user"] = 
@@ -484,6 +542,16 @@ namespace aci
 			.description = "creates a new user account",
 			.usage = " <user name> <password> [role] ...",
 			.fn = create_user_cb,
+			.expect_wdb = false,
+			//.perms = ADMIN,
+		};
+
+		ct["user_roles"] = 
+		{
+			.arity = 1,
+			.description = "show all the roles a user has",
+			.usage = " <user name>",
+			.fn = user_roles_cb,
 			.expect_wdb = false,
 			//.perms = ADMIN,
 		};
@@ -498,7 +566,7 @@ namespace aci
 		ct["show_roles"] = 
 		{
 			.description = "returns a list of roles",
-			.fn = show_roles_cb,
+			.fn = user_roles_cb,
 			.expect_wdb = false,
 		};
 
@@ -605,7 +673,7 @@ namespace aci
 			.description = "sets a value to the working database. any additional values will be concatenated together",
 			.usage = " <key> <value> <...>",
 			.fn = set_cb,
-			.perms = SET,
+			.perms = set_perms(SET),
 		};
 
 		ct["update"] = 
@@ -622,7 +690,7 @@ namespace aci
 			.description = "gets a value from the workind database from the given key",
 			.usage = " <key>",
 			.fn = get_cb,
-			.perms = VIEW,
+			.perms = set_perms(VIEW),
 		};
 
 		ct["erase"] = 
@@ -701,7 +769,7 @@ namespace aci
 
 		size_t offset = data[0]+1;
 
-		std::set<FlagT> looking;
+		std::set<FLAG> looking;
 
 		while (offset < data.size())
 		{
@@ -715,17 +783,19 @@ namespace aci
 				return false;
 			}
 
-			FlagT flag;
+			unsigned long ulong;
 
-			memcpy(opt.value().data(), (char*)&flag, sizeof(FlagT));
+			memcpy((char*)&ulong, opt.value().data(), sizeof(FlagT));
+
+			FlagT flag = ulong;
 
 			for (auto [_, perm] : perm_table)
 			{
-				if ((needed & perm) && looking.contains(flag))
+				if (needed.test(perm) && looking.contains(perm))
 				{
-					looking.erase(flag);
+					looking.erase(perm);
 				}
-				else if ((needed & perm) && !(flag & perm))
+				else if (needed.test(perm) && !flag.test(perm))
 				{
 					looking.emplace(perm);
 				}
