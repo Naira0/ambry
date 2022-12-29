@@ -18,27 +18,50 @@
 namespace aci
 {
 	// the underlying type of the flag
-	using FlagT = std::bitset<32>;
+	using FlagT = std::bitset<15>;
 	
 	enum FLAG 
 	{
 		SET,
-		GET, 
-		VIEW,
+		GET,
+		ERASE,
+		UPDATE,
+		CREATE_USER,
+		DELETE_USER,
+		CREATE_ROLE,
+		DELETE_ROLE,
+		ADD_ROLES,
+		REMOVE_ROLES,
+		OPEN,
+		CLOSE,
+		CHANGE_OPT,
+		DESTROY,
+		INFO,
 	};
 
-	#define SET(f) { #f, f },
+	#define SETF(f) { #f, f },
 
 	static std::unordered_map<std::string_view, FLAG> perm_table
 	{
-		SET(SET)
-		SET(GET)
-		SET(VIEW)
+		SETF(SET)
+		SETF(GET)
+		SETF(ERASE)
+		SETF(UPDATE)
+		SETF(CREATE_USER)
+		SETF(DELETE_USER)
+		SETF(CREATE_ROLE)
+		SETF(ADD_ROLES)
+		SETF(REMOVE_ROLES)
+		SETF(OPEN)
+		SETF(CLOSE)
+		SETF(CHANGE_OPT)
+		SETF(DESTROY)
+		SETF(INFO)
 	};
 
 	static auto ADMIN = FlagT().set();
 
-	#undef SET
+	#undef SETF
 
 	struct Cmd
 	{
@@ -74,7 +97,7 @@ namespace aci
 	using DBTable  = std::unordered_map<std::string, ambry::DB>;
 
 	template<class ...A>
-	FlagT set_perms(A ...a)
+	constexpr FlagT set_perms(A ...a)
 	{
 		FlagT output;
 
@@ -95,6 +118,9 @@ namespace aci
 		ambry::DB users;
 		ambry::DB roles;
 
+		// dbs that are disallowed to perform ops on
+		std::set<std::string_view> restricted_dbs;
+
 		// useful for quit commands
 		bool running = true;
 
@@ -108,7 +134,10 @@ namespace aci
 			users.open();
 			roles.open();
 
-			auto admin_int = ADMIN.to_ullong();
+			restricted_dbs.emplace("__ACI_USERS__");
+			restricted_dbs.emplace("__ACI_ROLES__");
+
+			auto admin_int = ADMIN.to_ulong();
 
 			roles.set("admin", {(char*)&admin_int, sizeof(admin_int)});
 		}

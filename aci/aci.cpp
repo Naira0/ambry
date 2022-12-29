@@ -6,6 +6,7 @@
 #include <iostream>
 #include <optional>
 #include <cstring>
+#include <openssl/md5.h>
 
 #include "../shared/fmt.hpp"
 
@@ -38,6 +39,11 @@ namespace aci
 	Result open_cb(Ctx &ctx)
 	{
 		const std::string &name = ctx.cmd.args.front();
+
+		if (ctx.inter.restricted_dbs.contains(name))
+		{
+			return INTER_ERR("the provided database is restricted");
+		}
 
 		auto [iter, emplaced] = ctx.inter.dbt.emplace(name, ambry::DB(name));
 		
@@ -160,7 +166,14 @@ namespace aci
 
 	Result destroy_cb(Ctx &ctx)
 	{
-		auto iter = ctx.inter.dbt.find(ctx.cmd.args.front());
+		std::string &name = ctx.cmd.args.front();
+
+		if (ctx.inter.restricted_dbs.contains(name))
+		{
+			return INTER_ERR("the provided database is restricted");
+		}
+		
+		auto iter = ctx.inter.dbt.find(name);
 
 		if (iter == ctx.inter.dbt.end())
 		{
@@ -172,7 +185,9 @@ namespace aci
 			ctx.inter.wdb = nullptr;
 		}
 
-		return TO_RES(iter->second.destroy());
+		auto res = iter->second.destroy();
+
+		return TO_RES(res);
 	}
 
 	Result destroy_all_cb(Ctx &ctx)
@@ -261,6 +276,16 @@ namespace aci
 		buff += (uint8_t)password.size();
 		buff += password;
 
+		if (ctx.inter.users.size() == 0)
+		{
+			buff += (uint8_t)5;
+			buff += "admin";
+
+			ctx.inter.ct["create_user"].perms = ADMIN;
+
+			goto set;
+		}
+
 		for (; iter != ctx.cmd.args.end(); iter++)
 		{
 			if (iter->size() > 255)
@@ -268,10 +293,15 @@ namespace aci
 				return INTER_ERR("role length must be less then 256 chars");
 			}
 
+			if (!ctx.inter.roles.contains(*iter))
+			{
+				return INTER_ERR("invalid rolename provided");
+			}
+
 			buff += (uint8_t)iter->size();
 			buff += *iter;
 		}
-
+set:
 		auto res = ctx.inter.users.set(username, buff);
 
 		return TO_RES(res);
@@ -513,7 +543,7 @@ namespace aci
 
 		size_t offset = data[0]+1;
 
-		while (offset > data.size())
+		while (offset < data.size())
 		{
 			std::string role_name { get_field(data, offset) };
 			offset += role_name.size()+1;
@@ -526,10 +556,21 @@ namespace aci
 				continue;
 			}
 
-			output += perm_string(opt.value());
+			output += role_name;
+			output += ' ' + perm_string(opt.value()) + '\n';
 		}
 
-		fmt::println("yes");
+		return {{}, output};
+	}
+
+	Result show_users_cb(Ctx &ctx)
+	{
+		std::string output;
+
+		for (auto [username, _] : ctx.inter.users)
+		{
+			output += fmt::format("{}\n", username);
+		}
 
 		return {{}, output};
 	}
@@ -543,7 +584,15 @@ namespace aci
 			.usage = " <user name> <password> [role] ...",
 			.fn = create_user_cb,
 			.expect_wdb = false,
-			//.perms = ADMIN,
+			.perms = users.size() == 0 ? 0 : set_perms(CREATE_USER),
+		};
+
+		ct["show_users"] = 
+		{
+			.description = "returns a list of all users",
+			.fn = show_users_cb,
+			.expect_wdb = false,
+			.perms = set_perms(INFO),
 		};
 
 		ct["user_roles"] = 
@@ -553,7 +602,7 @@ namespace aci
 			.usage = " <user name>",
 			.fn = user_roles_cb,
 			.expect_wdb = false,
-			//.perms = ADMIN,
+			.perms = set_perms(INFO),
 		};
 
 		ct["active_users"] = 
@@ -561,13 +610,15 @@ namespace aci
 			.description = "returns a list of active users",
 			.fn = active_users_cb,
 			.expect_wdb = false,
+			.perms = set_perms(INFO),
 		};
 
 		ct["show_roles"] = 
 		{
 			.description = "returns a list of roles",
-			.fn = user_roles_cb,
+			.fn = show_roles_cb,
 			.expect_wdb = false,
+			.perms = set_perms(INFO),
 		};
 
 		ct["delete_role"] = 
@@ -577,6 +628,7 @@ namespace aci
 			.usage = " <role name>",
 			.fn = delete_role_cb,
 			.expect_wdb = false,
+			.perms = set_perms(DELETE_ROLE)
 		};
 
 		ct["create_role"] = 
@@ -586,6 +638,7 @@ namespace aci
 			.usage = " <role name> <permission> ...",
 			.fn = create_role_cb,
 			.expect_wdb = false,
+			.perms = set_perms(CREATE_ROLE)
 		};
 
 		ct["delete_user"] = 
@@ -595,7 +648,7 @@ namespace aci
 			.usage = " <user name>",
 			.fn = delete_user_cb,
 			.expect_wdb = false,
-			.perms = ADMIN,
+			.perms = set_perms(DELETE_USER)
 		};
 
 		ct["login"] = 
@@ -621,6 +674,7 @@ namespace aci
 			.usage = " <username> <role> ...",
 			.fn = add_roles_cb,
 			.expect_wdb = false,
+			.perms = set_perms(ADD_ROLES)
 		};
 
 		ct["remove_roles"] = 
@@ -630,6 +684,7 @@ namespace aci
 			.usage = " <username> <role> ...",
 			.fn = remove_roles_cb,
 			.expect_wdb = false,
+			.perms = set_perms(REMOVE_ROLES)
 		};
 
 		ct["open"] = 
@@ -639,6 +694,7 @@ namespace aci
 			.usage = " <db_name>",
 			.fn = open_cb,
 			.expect_wdb = false,
+			.perms = set_perms(OPEN)
 		};
 
 		ct["close"] = 
@@ -648,6 +704,7 @@ namespace aci
 			.usage = " <db_name>",
 			.fn = close_cb,
 			.expect_wdb = false,
+			.perms = set_perms(CLOSE)
 		};
 
 		ct["switch"] = 
@@ -665,6 +722,7 @@ namespace aci
 			.description = "turns the cache mode either on or off",
 			.usage = " <on/off>",
 			.fn = cache_mode_cb,
+			.perms = set_perms(CHANGE_OPT)
 		};
 
 		ct["set"] = 
@@ -682,6 +740,7 @@ namespace aci
 			.description = "updates a value to the working database. any additional values will be concatenated together",
 			.usage = " <key> <value> <...>",
 			.fn = update_cb,
+			.perms = set_perms(UPDATE)
 		};
 
 		ct["get"] = 
@@ -690,7 +749,7 @@ namespace aci
 			.description = "gets a value from the workind database from the given key",
 			.usage = " <key>",
 			.fn = get_cb,
-			.perms = set_perms(VIEW),
+			.perms = set_perms(GET),
 		};
 
 		ct["erase"] = 
@@ -699,6 +758,7 @@ namespace aci
 			.description = "erases a value from the workind database from the given key",
 			.usage = " <key>",
 			.fn = erase_cb,
+			.perms = set_perms(ERASE)
 		};
 
 		ct["close_all"] = 
@@ -707,6 +767,7 @@ namespace aci
 			.description = "closes all open databases",
 			.usage = "",
 			.fn = close_all_cb,
+			.perms = set_perms(CLOSE)
 		};
 
 		ct["destroy"] = 
@@ -715,6 +776,7 @@ namespace aci
 			.description = "destroys a database by its name",
 			.usage = " <db_name>",
 			.fn = destroy_cb,
+			.perms = set_perms(DESTROY)
 		};
 
 		ct["destroy_all"] = 
@@ -723,6 +785,7 @@ namespace aci
 			.description = "destroys all open databases",
 			.usage = "",
 			.fn = destroy_all_cb,
+			.perms = set_perms(DESTROY)
 		};
 
 		ct["cmds"] = 
@@ -732,6 +795,7 @@ namespace aci
 			.usage = "",
 			.fn = cmds_cb,
 			.expect_wdb = false,
+			.perms = set_perms(INFO)
 		};
 
 		ct["list_open"] = 
@@ -741,6 +805,7 @@ namespace aci
 			.usage = "",
 			.fn = list_open_cb,
 			.expect_wdb = false,
+			.perms = set_perms(INFO)
 		};
 	}
 
@@ -769,7 +834,7 @@ namespace aci
 
 		size_t offset = data[0]+1;
 
-		std::set<FLAG> looking;
+		int satisfied = 0;
 
 		while (offset < data.size())
 		{
@@ -780,29 +845,25 @@ namespace aci
 
 			if (!opt)
 			{
-				return false;
+				continue;
 			}
 
 			unsigned long ulong;
 
-			memcpy((char*)&ulong, opt.value().data(), sizeof(FlagT));
+			memcpy((char*)&ulong, opt.value().data(), sizeof(ulong));
 
 			FlagT flag = ulong;
 
 			for (auto [_, perm] : perm_table)
 			{
-				if (needed.test(perm) && looking.contains(perm))
+				if (needed.test(perm) && flag.test(perm))
 				{
-					looking.erase(perm);
-				}
-				else if (needed.test(perm) && !flag.test(perm))
-				{
-					looking.emplace(perm);
+					satisfied++;
 				}
 			}
 		}
 
-		return looking.empty();
+		return satisfied >= needed.count();
 	}
 
 	Result Interpreter::interpret(Cmd &cmd, int from)
