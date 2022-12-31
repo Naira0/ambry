@@ -1,5 +1,6 @@
 #pragma once
 
+#include "types.hpp"
 #include <alloca.h>
 #include <cstring>
 #include <string_view>
@@ -8,6 +9,9 @@
 
 namespace ambry
 {
+
+	Result destroy(const std::string &name);
+	
 	template<class T>
 	std::string to_bytes(T n)
 	{

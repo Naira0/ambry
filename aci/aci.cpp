@@ -10,6 +10,7 @@
 #include <openssl/md5.h>
 
 #include "../shared/fmt.hpp"
+#include "../lib/util.hpp"
 
 #define INTER_ERR(msg) {ambry::ResultType::InterpretError, msg}
 #define KEY_NOT_FND {ambry::ResultType::InterpretError, "there is no database by that name"}
@@ -178,7 +179,8 @@ namespace aci
 
 		if (iter == ctx.inter.dbt.end())
 		{
-			return KEY_NOT_FND;
+			auto result = ambry::destroy(name);
+			return TO_RES(result);
 		}
 
 		if (&iter->second == ctx.inter.wdb)
@@ -193,7 +195,6 @@ namespace aci
 
 	Result destroy_all_cb(Ctx &ctx)
 	{
-
 		for (auto &[_, db] : ctx.inter.dbt)
 		{
 			ambry::Result result = db.destroy();
@@ -496,15 +497,20 @@ set:
 		return {{}, output};
 	}
 
+	FlagT from_str(std::string_view str)
+	{
+		unsigned long ulong;
+
+		memcpy((char*)&ulong, str.data(), sizeof(ulong));
+
+		return ulong;
+	}
+
 	std::string perm_string(std::string_view flag_raw)
 	{
 		std::string output;
 
-		unsigned long ulong;
-
-		memcpy((char*)&ulong, flag_raw.data(), sizeof(ulong));
-
-		FlagT flag = ulong;
+		FlagT flag = from_str(flag_raw);
 
 		for (auto [name, value] : perm_table)
 		{
@@ -777,10 +783,11 @@ set:
 		ct["destroy"] = 
 		{
 			.arity = 1,
-			.description = "destroys a database by its name",
+			.description = "destroys a database by its name (does not need to be open)",
 			.usage = " <db_name>",
 			.fn = destroy_cb,
-			.perms = set_perms(DESTROY)
+			.expect_wdb = false,
+			.perms = set_perms(DESTROY),
 		};
 
 		ct["destroy_all"] = 
@@ -838,7 +845,8 @@ set:
 
 		size_t offset = data[0]+1;
 
-		std::unordered_set<FLAG> found;
+		int must_satisfy = needed.count();
+		int satisfied = 0;
 
 		while (offset < data.size())
 		{
@@ -852,22 +860,19 @@ set:
 				continue;
 			}
 
-			unsigned long ulong;
-
-			memcpy((char*)&ulong, opt.value().data(), sizeof(ulong));
-
-			FlagT flag = ulong;
+			FlagT flag = from_str(opt.value());
 
 			for (auto [_, perm] : perm_table)
 			{
 				if (needed.test(perm) && flag.test(perm))
 				{
-					found.emplace(perm);
+					satisfied++;
+					needed.flip(perm);
 				}
 			}
 		}
 
-		return found.size() >= needed.count();
+		return satisfied >= must_satisfy;
 	}
 
 	Result Interpreter::interpret(Cmd &cmd, int from)
