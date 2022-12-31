@@ -18,6 +18,19 @@
 
 namespace aci
 {
+
+	ambry::DB** Interpreter::get_wdb(int from)
+	{
+		auto iter = logins.find(from);
+
+		if (iter == logins.end())
+		{
+			return nullptr;
+		}
+
+		return &iter->second.wdb;
+	}
+
 	Result update_set_impl(Ctx &ctx, uint8_t m)
 	{
 		auto iter = ctx.cmd.args.begin();
@@ -33,7 +46,7 @@ namespace aci
 			args += std::move(*iter);
 		}
 
-		auto res = m ? ctx.inter.wdb->set(key, args) : ctx.inter.wdb->update(key, args);
+		auto res = m ? ctx.wdb->set(key, args) : ctx.wdb->update(key, args);
 
 		return TO_RES(res);
 	}
@@ -51,12 +64,13 @@ namespace aci
 		
 		if (!emplaced)
 		{
-			return INTER_ERR("a database with that name already exists");
+			ctx.wdb = &iter->second;
+			return {};
 		}
 
-		ctx.inter.wdb = &iter->second;
+		ctx.wdb = &iter->second;
 
-		auto res = ctx.inter.wdb->open();
+		auto res = ctx.wdb->open();
 
 		return TO_RES(res);
 	}
@@ -70,12 +84,12 @@ namespace aci
 			return KEY_NOT_FND;
 		}
 
-		iter->second.close();
-
-		if (&iter->second == ctx.inter.wdb)
+		if (&iter->second == ctx.wdb)
 		{
-			ctx.inter.wdb = nullptr;
+			ctx.wdb = nullptr;
 		}
+
+		iter->second.close();
 
 		ctx.inter.dbt.erase(iter);
 
@@ -91,7 +105,7 @@ namespace aci
 			return KEY_NOT_FND;
 		}
 
-		ctx.inter.wdb = &iter->second;
+		ctx.wdb = &iter->second;
 
 		return {};
 	}
@@ -115,7 +129,7 @@ namespace aci
 			return INTER_ERR("exepcted on or off");
 		}
 
-		ctx.inter.wdb->switch_cache(on);
+		ctx.wdb->switch_cache(on);
 
 		return {};
 	}
@@ -129,9 +143,9 @@ namespace aci
 	{
 		const std::string &key = ctx.cmd.args.front();
 
-		if (ctx.inter.wdb->is_cached())
+		if (ctx.wdb->is_cached())
 		{
-			auto opt = ctx.inter.wdb->get_cached(key);
+			auto opt = ctx.wdb->get_cached(key);
 
 			if (!opt)
 			{
@@ -142,7 +156,7 @@ namespace aci
 		}
 		else
 		{
-			auto opt = ctx.inter.wdb->get(key);
+			auto opt = ctx.wdb->get(key);
 
 			if (!opt)
 			{
@@ -160,7 +174,7 @@ namespace aci
 			db.close();
 		}
 
-		ctx.inter.wdb = nullptr;
+		ctx.wdb = nullptr;
 		ctx.inter.dbt.clear();
 
 		return {};
@@ -183,9 +197,9 @@ namespace aci
 			return TO_RES(result);
 		}
 
-		if (&iter->second == ctx.inter.wdb)
+		if (&iter->second == ctx.wdb)
 		{
-			ctx.inter.wdb = nullptr;
+			ctx.wdb = nullptr;
 		}
 
 		auto res = iter->second.destroy();
@@ -207,7 +221,7 @@ namespace aci
 
 		ctx.inter.dbt.clear();
 
-		ctx.inter.wdb = nullptr;
+		ctx.wdb = nullptr;
 
 		return {};
 	}
@@ -243,7 +257,7 @@ namespace aci
 
 	Result erase_cb(Ctx &ctx)
 	{
-		auto res = ctx.inter.wdb->erase(ctx.cmd.args.front());
+		auto res = ctx.wdb->erase(ctx.cmd.args.front());
 		return TO_RES(res);
 	}
 
@@ -251,7 +265,7 @@ namespace aci
 	{
 		std::string output;
 
-		output += "name - size";
+		output += "name - size\n";
 
 		for (auto &[_, db] : ctx.inter.dbt)
 		{
@@ -489,9 +503,9 @@ set:
 	{
 		std::string output;
 
-		for (auto &[_, username] : ctx.inter.logins)
+		for (auto &[_, login] : ctx.inter.logins)
 		{
-			output += username + '\n';
+			output += login.name + '\n';
 		}
 
 		return {{}, output};
@@ -585,6 +599,11 @@ set:
 		return {{}, output};
 	}
 
+	Result working_db_cb(Ctx &ctx)
+	{
+		return {{}, std::string{ ctx.wdb->name() }};
+	}
+
 	void Interpreter::init_commands()
 	{
 		ct["create_user"] = 
@@ -595,6 +614,13 @@ set:
 			.fn = create_user_cb,
 			.expect_wdb = false,
 			.perms = users.size() == 0 ? 0 : set_perms(CREATE_USER),
+		};
+
+		ct["working_db"] = 
+		{
+			.description = "returns the working db name",
+			.fn = working_db_cb,
+			.perms = set_perms(INFO),
 		};
 
 		ct["show_users"] = 
@@ -834,7 +860,7 @@ set:
 			return false;
 		}
 
-		auto opt = users.get(iter->second);
+		auto opt = users.get(iter->second.name);
 
 		if (!opt)
 		{
@@ -891,7 +917,9 @@ set:
 			return INTER_ERR("Not enough arguments to command");
 		}
 
-		if (ch.expect_wdb && !wdb)
+		ambry::DB **wdb = get_wdb(from);
+
+		if (ch.expect_wdb && !(*wdb))
 		{
 			return INTER_ERR("expected an open database but none found");
 		}
@@ -901,6 +929,7 @@ set:
 			*this,
 			cmd,
 			from,
+			*wdb
 		};
 
 		if (!calculate_perms(from, ch.perms))

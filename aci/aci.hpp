@@ -78,6 +78,7 @@ namespace aci
 		Interpreter &inter;
 		Cmd &cmd;
 		int fd;
+		ambry::DB *&wdb;
 	};
 
 	typedef Result(*CmdFN)(Ctx&);
@@ -96,6 +97,12 @@ namespace aci
 	using CmdTable = std::unordered_map<std::string_view, CmdHandle>;
 	using DBTable  = std::unordered_map<std::string, ambry::DB>;
 
+	struct Login
+	{
+		std::string name;
+		ambry::DB *wdb;
+	};
+
 	template<class ...A>
 	constexpr FlagT set_perms(A ...a)
 	{
@@ -111,8 +118,6 @@ namespace aci
 		CmdTable ct;
 		// a reference to table of open databases
 		DBTable &dbt;
-		// the working database
-		ambry::DB *wdb{};
 
 		// the internal database used for storing user and role information
 		ambry::DB users;
@@ -124,7 +129,7 @@ namespace aci
 		// useful for quit commands
 		bool running = true;
 
-		std::unordered_map<int, std::string> logins;
+		std::unordered_map<int, Login> logins;
 
 		Interpreter(DBTable &dbt) :
 			dbt(dbt),
@@ -147,6 +152,8 @@ namespace aci
 		Result interpret(Cmd &cmd, int from);
 
 		bool calculate_perms(int from, FlagT needed);
+
+		ambry::DB** get_wdb(int from);
 	};
 
 	std::vector<Cmd> parse(std::string_view source);
