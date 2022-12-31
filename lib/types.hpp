@@ -54,7 +54,7 @@ namespace ambry
 
 	struct Options
 	{
-        bool enable_cache = false;
+        bool enable_cache = true;
 	};
 
     // important shared data

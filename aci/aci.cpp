@@ -6,6 +6,7 @@
 #include <iostream>
 #include <optional>
 #include <cstring>
+#include <unordered_set>
 #include <openssl/md5.h>
 
 #include "../shared/fmt.hpp"
@@ -347,6 +348,11 @@ set:
 
 	Result login_cb(Ctx &ctx)
 	{
+		if (ctx.inter.logins.contains(ctx.fd))
+		{
+			return INTER_ERR("you are already logged in to a user account");
+		}
+
 		std::string &username = ctx.cmd.args[0];
 		std::string &password = ctx.cmd.args[1];
 
@@ -360,8 +366,6 @@ set:
 		std::string &data = opt.value();
 
 		std::string_view userpass = get_field(data, 0);
-
-		fmt::println("pass {}", userpass);
 
 		if (password != userpass)
 		{
@@ -834,7 +838,7 @@ set:
 
 		size_t offset = data[0]+1;
 
-		int satisfied = 0;
+		std::unordered_set<FLAG> found;
 
 		while (offset < data.size())
 		{
@@ -858,12 +862,12 @@ set:
 			{
 				if (needed.test(perm) && flag.test(perm))
 				{
-					satisfied++;
+					found.emplace(perm);
 				}
 			}
 		}
 
-		return satisfied >= needed.count();
+		return found.size() >= needed.count();
 	}
 
 	Result Interpreter::interpret(Cmd &cmd, int from)
