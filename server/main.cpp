@@ -1,4 +1,3 @@
-#include "fmt.hpp"
 #include "db.hpp"
 #include "aci.hpp"
 
@@ -64,7 +63,7 @@ SockOpt init_opts(int argc, char **argv)
 
 	if (!result.ok())
 	{
-		fmt::fatal("could not parse flags {}", result.error);
+		fmt::fatal("could not parse flags {}\n", result.error);
 	}
 
 #define GET(t, id) std::get<t>(parser.get(id).value()->data)

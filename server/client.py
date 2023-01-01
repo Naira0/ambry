@@ -2,7 +2,7 @@ import socket
 from sys import byteorder, stdin
 from select import poll, POLLIN
 
-PORT = 3001
+PORT = 3000
 HOST = socket.gethostname()
 
 def connect():

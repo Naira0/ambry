@@ -178,6 +178,18 @@ std::string construct_responce(const aci::Result &result)
 	return buff;
 }
 
+std::string_view from_who(int fd, aci::Interpreter &inter)
+{
+	auto iter = inter.logins.find(fd);
+
+	if (iter == inter.logins.end())
+	{
+		return "Unknown";
+	}
+
+	return iter->second.name;
+}
+
 void Server::command_loop(aci::Interpreter &inter)
 {
 	while (true)
@@ -199,7 +211,7 @@ void Server::command_loop(aci::Interpreter &inter)
 			{
 				aci::Result result = inter.interpret(c, fd);
 
-				//LOG(info, "'{}' executed by {}", c.cmd, )
+				LOG(info, "'{}' executed by {}", c.cmd, from_who(fd, inter));
 
 				send(construct_responce(result), fd);
 			}
