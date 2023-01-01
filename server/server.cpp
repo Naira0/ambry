@@ -43,7 +43,6 @@ void Server::listen()
 		LOG_ERRNO(fatal);
 	}
 
-
 	m_listener = std::thread
 	{
 		[&]

@@ -2,7 +2,7 @@ import socket
 from sys import byteorder, stdin
 from select import poll, POLLIN
 
-PORT = 3000
+PORT = 3001
 HOST = socket.gethostname()
 
 def connect():
@@ -14,19 +14,35 @@ def connect():
 
 	return s
 
-def send_input(s: socket.socket):
-	message = input()
-	data = len(message).to_bytes(4, byteorder) + message.encode()
-	s.sendall(data)
+def prepare_message(message: str):
+	return len(message).to_bytes(4, byteorder) + message.encode()
 
-def get_input(s: socket.socket):
+def get_message(s: socket.socket):
 	data = s.recv(5)
 
 	status_code = data[0]
+
 	res_len = int.from_bytes(data[1:5], byteorder)
 
-	data = s.recv(res_len)
+	return (status_code, s.recv(res_len))
 
+def get_db_name(s: socket.socket):
+	s.sendall(prepare_message("working_db"))
+
+	(status_code, data) = get_message(s)
+
+	if (status_code != 0):
+		return "No db open"
+
+	return data.decode()
+
+def send_input(s: socket.socket):
+	name = get_db_name(s)
+	message = input(f"{name} => ")
+	s.sendall(prepare_message(message))
+
+def get_input(s: socket.socket):
+	(status_code, data) = get_message(s)
 	print(f"{status_code}; {data.decode()}")
 
 def command_loop():

@@ -10,7 +10,8 @@ add_executable(ambry-server
 	main.cpp
 	server.hpp server.cpp
 	log.hpp log.cpp
-	socket_util.hpp socket_util.cpp)
+	socket_util.hpp socket_util.cpp 
+	flags.hpp)
 
 include_directories(../shared)
 # add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../lib ${CMAKE_CURRENT_BINARY_DIR}/lib)

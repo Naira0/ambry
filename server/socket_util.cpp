@@ -108,17 +108,17 @@ ConInfo init(SockOpt opt)
 		break;
 	}
 
-	ci.port = get_port(fd);
-
-	inet_ntop(p->ai_family, in_addr((sockaddr*)&p), ci.ipstr, sizeof(ci.ipstr));
-
-	freeaddrinfo(ai);
-
 	if (!p)
 	{
 		return "could not find valid addrinfo node";
 	}
 
+	ci.port = get_port(fd);
+
+	inet_ntop(p->ai_family, in_addr((sockaddr*)&p), ci.ipstr, sizeof(ci.ipstr));
+
+	freeaddrinfo(ai);
+	
 	ci.fd = fd;
 
 	return ci;

@@ -919,7 +919,7 @@ set:
 
 		ambry::DB **wdb = get_wdb(from);
 
-		if (ch.expect_wdb && !(*wdb))
+		if (ch.expect_wdb && (wdb && !(*wdb)))
 		{
 			return INTER_ERR("expected an open database but none found");
 		}
