@@ -7,4 +7,5 @@ add_library(ambry_lib
         types.hpp
         util.hpp util.cpp
         transaction.hpp transaction.cpp
-        rw.hpp rw.cpp)
+        rw.hpp rw.cpp
+        asf.hpp asf.cpp)

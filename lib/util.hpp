@@ -11,6 +11,14 @@ namespace ambry
 {
 
 	Result destroy(const std::string &name);
+
+	// returns 1 for little indian 0 for big
+	static inline 
+	uint8_t machine_endian()
+	{
+		static int i = 1;
+		return ((char*)&i)[0];
+	}
 	
 	template<class T>
 	std::string to_bytes(T n)

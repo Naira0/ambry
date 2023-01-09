@@ -1,5 +1,6 @@
 #include "io_manager.hpp"
 #include "types.hpp"
+#include "util.hpp"
 
 #include <cstdint>
 #include <fcntl.h>
@@ -91,12 +92,6 @@ namespace ambry
 		return {};
 
 	#undef HANDLE
-	}
-
-	inline uint8_t machine_endian()
-	{
-		static const int i = 1;
-		return ((char*)&i)[0];
 	}
 
 	char read_byte(int fd)
