@@ -14,12 +14,11 @@ namespace ambry
 	enum Type : uint8_t
 	{
 		I8, U8, I16, U16, I32, U32, I64, U64, Double, 
-		StringT, ArrayT, MapT
+		StringT, ArrayT, MapT, AnyT
 	};
 
 	struct Value;
 
-    //  NOTE does not preserve insertion order
     using Array  = std::vector<Value>;
 	using Map = std::unordered_map<std::string, Value>;
 
@@ -73,7 +72,7 @@ namespace ambry
 			}
 			else
 			{
-				emplace<T>(std::forward<T>(value));
+				emplace<T>(value);
 			}
         }
     };
@@ -85,6 +84,9 @@ namespace ambry
 	std::optional<Value> deserialize_value(std::string_view buff);
 
 	std::optional<Map> deserialize(std::string_view buff);
+
+	// recursively converts any value to a string
+	std::string to_string(const Value &value);
 
 	// determines if serialized data is a single value 
 	static inline bool is_single(std::string_view buff)
@@ -107,4 +109,29 @@ namespace ambry
 		
 		return buff[0] == 1;
 	}
+
+	typedef void(*ValidateFN)(Value &value);
+
+	struct SchemaOpts
+	{
+		bool allow_undefined;
+	};
+
+	struct SchemaField
+	{
+		bool optional;
+		Type type = AnyT;
+		ValidateFN fn = nullptr;
+		bool found = false;
+	};
+
+	using Struct = std::unordered_map<std::string_view, SchemaField>;
+
+	struct Schema
+	{
+		SchemaOpts opts;
+		Struct fields;
+	};
+
+	std::optional<Map> deserialize(std::string_view buff, Schema &schema);
 };

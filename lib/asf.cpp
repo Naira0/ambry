@@ -2,14 +2,15 @@
 #include "util.hpp"
 
 #include <algorithm>
+#include <cassert>
+
+#include "../shared/fmt.hpp"
 
 // one byte for the type, 4 for the size.
 // a serialized value should always be more than this
 constexpr int VALUE_HEADER_SIZE = 5;
 // one byte is for type (1 key value, 2 single value) and one byte for endianness
 constexpr int HEADER_SIZE = 2;
-
-
 
 template<class T>
 void write_to(std::string &buff, T n)
@@ -166,15 +167,17 @@ std::string ambry::serialize(const Map &map)
 	return buff;
 }
 
-std::optional<ambry::Value> 
+std::optional<
+	std::pair<ambry::Value, size_t>> 
 _deserialize(std::string_view buff, bool should_reverse);
 
-std::optional<ambry::Value> 
+std::optional<
+	std::pair<ambry::Value, size_t>>
 deserialize_array(std::string_view buff, bool should_reverse, uint32_t len)
 {
 	ambry::Array out;
 
-	size_t offset = VALUE_HEADER_SIZE;
+	size_t offset = 0;
 
 	for (int i = 0; i < len; i++)
 	{
@@ -185,25 +188,27 @@ deserialize_array(std::string_view buff, bool should_reverse, uint32_t len)
 			return std::nullopt;
 		}
 
-		auto n  = read_to<uint32_t>(buff.substr(offset+1));
-		offset += VALUE_HEADER_SIZE + n;
+		auto &[value, size] = opt.value();
 
-		out.emplace_back(opt.value());
+		offset += VALUE_HEADER_SIZE + size;
+
+		out.emplace_back(std::move(value));
 	}
 
-	return out;
+	return {{ out, offset }};
 }
 
-std::optional<ambry::Map> 
+std::optional<
+	std::pair<ambry::Map, size_t>> 
 deserialize_map(std::string_view buff, bool should_reverse, uint32_t len)
 {
 	ambry::Map out;
 
-	size_t offset = VALUE_HEADER_SIZE;
+	size_t offset = 0;
 
 	for (int i = 0; i < len; i++)
 	{
-		auto key_len = read_to<uint16_t>(buff.substr(offset));
+		auto key_len = read_to<uint16_t>(buff.substr(offset), should_reverse);
 
 		std::string key { buff.substr(offset+2, key_len) };
 
@@ -216,22 +221,27 @@ deserialize_map(std::string_view buff, bool should_reverse, uint32_t len)
 			return std::nullopt;
 		}
 
-		auto n  = read_to<uint32_t>(buff.substr(offset+1));
-		offset += VALUE_HEADER_SIZE + n;
+		auto &[value, size] = opt.value();
 
-		out.emplace(std::move(key), opt.value());
+		offset += VALUE_HEADER_SIZE + size;
+
+		out.emplace(std::move(key), std::move(value));
 	}
 
-	return out;
+	return {{ out, offset }};
 }
 
-std::optional<ambry::Value> 
+std::optional<
+	std::pair<ambry::Value, size_t>> 
 _deserialize(std::string_view buff, bool should_reverse)
 {
 	uint8_t type = buff[0];
-	auto len  = read_to<uint32_t>(buff.data()+1);
 
-#define INTEGRAL_CASE(t, T) case t: return read_to<T>(buff.substr(VALUE_HEADER_SIZE, len), should_reverse);
+	auto len = read_to<uint32_t>(buff.data()+1);
+
+	buff = buff.substr(VALUE_HEADER_SIZE);
+
+#define INTEGRAL_CASE(t, T) case t: return {{ read_to<T>(buff, should_reverse), sizeof(T) }};
 
 	using namespace ambry;
 
@@ -248,7 +258,7 @@ _deserialize(std::string_view buff, bool should_reverse)
 		INTEGRAL_CASE(Double, double)
 		case StringT:
 		{
-			return std::string { buff.data()+VALUE_HEADER_SIZE, len };
+			return {{ std::string { buff.substr(0, len) }, len }};
 		}
 		case ArrayT:
 		{
@@ -256,7 +266,14 @@ _deserialize(std::string_view buff, bool should_reverse)
 		}
 		case MapT:
 		{
-			return deserialize_array(buff, should_reverse, len);
+			auto opt = deserialize_map(buff, should_reverse, len);
+
+			if (!opt)
+			{
+				return std::nullopt;
+			}
+
+			return opt.value();
 		}
 	}
 
@@ -279,7 +296,14 @@ ambry::deserialize_value(std::string_view buff)
 
 	bool should_reverse = buff[1] != machine_endian();
 
-	return _deserialize(buff.substr(2), should_reverse);
+	auto opt = _deserialize(buff.substr(6), should_reverse);
+
+	if (!opt)
+	{
+		return std::nullopt;
+	}
+
+	return opt.value().first;
 }
 
 std::optional<ambry::Map> 
@@ -291,5 +315,58 @@ ambry::deserialize(std::string_view buff)
 
 	auto len = read_to<uint32_t>(buff.substr(2));
 
-	return deserialize_map(buff.substr(3), should_reverse, len);
+	auto opt = deserialize_map(buff.substr(6), should_reverse, len);
+
+	if (!opt)
+	{
+		return std::nullopt;
+	}
+
+	return opt.value().first;
 }
+
+std::string ambry::to_string(const Value &value)
+{
+#define INTEGRAL_CASE(t) case t: return std::to_string(std::get<t>(value));
+
+	switch (value.index())
+	{
+		INTEGRAL_CASE(I32)
+		case StringT: return "\"" + std::get<StringT>(value) + "\"";
+		case ArrayT:
+		{
+			auto vec = std::get<ArrayT>(value);
+
+			auto iter = vec.begin();
+
+			std::string buff = "[ " + to_string(*iter++);
+
+			for (; iter != vec.end(); iter++)
+			{
+				buff += ", " + to_string(*iter);
+			}
+
+			buff += " ]";
+
+			return buff;
+		} 
+		case MapT:
+		{
+			std::string buff = "{\n";
+
+			auto map = std::get<MapT>(value);
+
+			for (const auto &[k, v] : map)
+			{
+				buff += k + ": " + to_string(v) + '\n';
+			}
+
+			buff += "}";
+
+			return buff;
+		}
+	}
+
+#undef INTEGRAL_CASE
+}
+
