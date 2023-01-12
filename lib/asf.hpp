@@ -110,7 +110,7 @@ namespace ambry
 		return buff[0] == 1;
 	}
 
-	typedef void(*ValidateFN)(Value &value);
+	typedef bool(*ValidateFN)(Value &value);
 
 	struct SchemaOpts
 	{
@@ -119,8 +119,8 @@ namespace ambry
 
 	struct SchemaField
 	{
-		bool optional;
 		Type type = AnyT;
+		bool optional = false;
 		ValidateFN fn = nullptr;
 		bool found = false;
 	};

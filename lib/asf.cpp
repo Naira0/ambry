@@ -370,3 +370,88 @@ std::string ambry::to_string(const Value &value)
 #undef INTEGRAL_CASE
 }
 
+#define CHECK(expr) if (iter != schema.fields.end() && (expr)) return std::nullopt
+
+std::optional<
+	std::pair<ambry::Map, size_t>> 
+deserialize_map(std::string_view buff, bool should_reverse, uint32_t len, ambry::Schema &schema)
+{
+	ambry::Map out;
+
+	size_t offset = 0;
+
+	for (int i = 0; i < len; i++)
+	{
+		auto key_len = read_to<uint16_t>(buff.substr(offset), should_reverse);
+
+		std::string key { buff.substr(offset+2, key_len) };
+
+		auto iter = schema.fields.find(key);
+
+		if (iter == schema.fields.end() && !schema.opts.allow_undefined)
+		{
+			return std::nullopt;
+		}
+		else
+		{
+			iter->second.found = true;
+		}
+
+		offset += 2 + key_len;
+
+		uint8_t type = buff[offset];
+
+		CHECK(iter->second.type != ambry::AnyT && type != iter->second.type);
+
+		auto opt = _deserialize(buff.substr(offset), should_reverse);
+
+		if (!opt)
+		{
+			return std::nullopt;
+		}
+
+		auto &[value, size] = opt.value();
+
+		if (iter != schema.fields.end() && iter->second.fn)
+		{
+			if (!iter->second.fn(value))
+			{
+				return std::nullopt;
+			}
+		}
+
+		offset += VALUE_HEADER_SIZE + size;
+
+		out.emplace(std::move(key), std::move(value));
+	}
+
+	for (auto &[_, field] : schema.fields)
+	{
+		if (!field.optional && !field.found)
+		{
+			return std::nullopt;
+		}
+	}
+
+	return {{ out, offset }};
+}
+
+#undef CHECK
+
+std::optional<ambry::Map> ambry::deserialize(std::string_view buff, Schema &schema)
+{
+	DESERIALIZE_CHECK(is_single);
+	
+	bool should_reverse = buff[1] != machine_endian();
+
+	auto len = read_to<uint32_t>(buff.substr(2));
+
+	auto opt = deserialize_map(buff.substr(6), should_reverse, len, schema);
+
+	if (!opt)
+	{
+		return std::nullopt;
+	}
+
+	return opt.value().first;
+}
